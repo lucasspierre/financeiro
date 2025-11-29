@@ -1,0 +1,30 @@
+<div class="container py-3">
+
+  <h2 class="mb-4">Configurações</h2>
+
+  <div *ngIf="loading">
+    Carregando configurações...
+  </div>
+
+  <form *ngIf="!loading" [formGroup]="configForm" (ngSubmit)="saveConfig()" class="row g-3">
+
+    <div class="col-md-4">
+      <label class="form-label">Teto mensal (R$)</label>
+      <input class="form-control" formControlName="monthlyLimit" type="number" step="0.01">
+    </div>
+
+    <div class="col-md-4">
+      <label class="form-label">Mês de referência</label>
+      <input class="form-control" formControlName="referenceMonth" type="month">
+      <!-- O input type=month retorna YYYY-MM -->
+    </div>
+
+    <div class="col-12 text-end">
+      <button class="btn btn-primary" [disabled]="saving || configForm.invalid">
+        {{ saving ? 'Salvando...' : 'Salvar Configurações' }}
+      </button>
+    </div>
+
+  </form>
+
+</div>

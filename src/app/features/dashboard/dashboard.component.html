@@ -1,0 +1,136 @@
+<div class="container py-4">
+
+  <h2 class="mb-4">Dashboard Inteligente</h2>
+
+  <div *ngIf="loading">
+    Carregando...
+  </div>
+
+  <div *ngIf="!loading && snapshot">
+
+    <!-- Resumo geral -->
+    <div class="card mb-4">
+      <div class="card-body">
+
+        <h4 class="mb-3">
+          Resumo do mês {{ snapshot.config.referenceMonth }}
+        </h4>
+
+        <p>
+          <strong>Entradas:</strong>
+          {{ monthIncomeSum | currency:'BRL' }}
+        </p>
+
+        <p>
+          <strong>Despesas (parcelas do cartão + Pix/Débito + financiamento):</strong>
+          {{ monthExpensesSum | currency:'BRL' }}
+        </p>
+
+        <p>
+          <strong>Saldo do mês:</strong>
+          <span [ngClass]="saldoMes >= 0 ? 'text-success' : 'text-danger'">
+            {{ saldoMes | currency:'BRL' }}
+          </span>
+        </p>
+
+        <p>
+          <strong>Teto mensal:</strong>
+          {{ snapshot.config.monthlyLimit | currency:'BRL' }}
+        </p>
+
+        <p>
+          <strong>Uso do teto:</strong>
+          {{ percentageUsed | number:'1.0-2' }}%
+        </p>
+
+        <div
+          *ngIf="percentageUsed >= 80 && percentageUsed < 100"
+          class="alert alert-warning mt-2"
+        >
+          ⚠ Você já gastou {{ percentageUsed | number:'1.0-2' }}% do teto mensal.
+        </div>
+
+        <div
+          *ngIf="percentageUsed >= 100"
+          class="alert alert-danger mt-2"
+        >
+          🔴 Você ultrapassou o teto mensal!
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Parcelas do mês (cartão + terceiros) -->
+    <div class="card mb-4">
+      <div class="card-body">
+
+        <h4>Parcelas ativas no mês</h4>
+
+        <p *ngIf="parcelasDoMes.length === 0">
+          Nenhuma parcela prevista para este mês.
+        </p>
+
+        <ul *ngIf="parcelasDoMes.length > 0">
+          <li *ngFor="let p of parcelasDoMes">
+            <ng-container *ngIf="p.isThirdParty; else normalParcela">
+              [Terceiros] {{ p.personName }} — {{ p.description }}
+              — Parcela {{ p.numero }}/{{ p.total }}
+              — {{ p.valor | currency:'BRL' }}
+            </ng-container>
+
+            <ng-template #normalParcela>
+              {{ p.description }}
+              — Parcela {{ p.numero }}/{{ p.total }}
+              — {{ p.valor | currency:'BRL' }}
+            </ng-template>
+          </li>
+        </ul>
+
+      </div>
+    </div>
+
+    <!-- Financiamentos -->
+    <div class="card mb-4">
+      <div class="card-body">
+        <h4>Financiamentos / Empréstimos</h4>
+
+        <p *ngIf="gastosFinanciamento.length === 0">
+          Nenhum financiamento cadastrado.
+        </p>
+
+        <ul *ngIf="gastosFinanciamento.length > 0">
+          <li *ngFor="let g of gastosFinanciamento">
+            {{ g.description }} — {{ g.amount | currency:'BRL' }}
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Cartão emprestado -->
+    <div class="card">
+      <div class="card-body">
+        <h4>Cartão emprestado (terceiros)</h4>
+
+        <p>
+          <strong>Total de compras de terceiros:</strong>
+          {{ terceirosTotalCompras | currency:'BRL' }}
+        </p>
+
+        <p>
+          <strong>Parcelas de terceiros neste mês (a receber):</strong>
+          {{ terceirosParcelasMes | currency:'BRL' }}
+        </p>
+
+        <p>
+          <strong>Parcelas de terceiros em meses futuros:</strong>
+          {{ terceirosParcelasFuturas | currency:'BRL' }}
+        </p>
+
+        <small class="text-muted">
+          Depois o módulo de Entradas vai mostrar o que já foi realmente pago.
+        </small>
+      </div>
+    </div>
+
+  </div>
+</div>

@@ -1,0 +1,276 @@
+<div class="container py-3">
+
+    <h2 class="mb-3">Despesas</h2>
+
+    <!-- FILTROS SUPERIORES -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <label class="form-label">Filtrar por mês:</label>
+            <select class="form-select" [(ngModel)]="mesFiltro">
+                <option *ngFor="let mes of mesesDisponiveis" [value]="mes">
+                    {{ mes }}
+                </option>
+            </select>
+        </div>
+
+        <div class="col-md-3">
+            <label class="form-label">Ordenar por:</label>
+            <select class="form-select" (change)="trocarOrdenacao($any($event.target).value)">
+                <option value="DESC" selected>Mais recente</option>
+                <option value="ASC">Mais antiga</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- CADASTRO -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <h4 class="mb-3">Cadastrar nova despesa</h4>
+
+            <form [formGroup]="expenseForm" (ngSubmit)="submitForm()" class="row g-3">
+
+                <div class="col-md-4">
+                    <label class="form-label">Descrição</label>
+                    <input class="form-control" formControlName="description">
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label">Valor total (R$)</label>
+                    <input class="form-control" type="number" step="0.01" formControlName="amount">
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label">Data da compra</label>
+                    <input class="form-control" type="date" formControlName="date">
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label">Tipo</label>
+                    <select class="form-select" formControlName="type">
+                        <option *ngFor="let t of expenseTypes" [value]="t.value">
+                            {{ t.label }}
+                        </option>
+                    </select>
+                </div>
+
+                <!-- PARCELAS (CARTAO / CARTAO_EMPRESTADO) -->
+                <div class="col-md-2" *ngIf="
+            expenseForm.value.type === 'CARTAO' ||
+            expenseForm.value.type === 'CARTAO_EMPRESTADO'
+          ">
+                    <label class="form-label">Total de parcelas</label>
+                    <input class="form-control" type="number" min="1" formControlName="totalInstallments">
+                    <small class="text-muted">
+                        Se vazio, considera 1 (à vista na fatura).
+                    </small>
+                </div>
+
+                <div class="col-md-3" *ngIf="
+            expenseForm.value.type === 'CARTAO' ||
+            expenseForm.value.type === 'CARTAO_EMPRESTADO'
+          ">
+                    <label class="form-label">Valor da parcela (opcional)</label>
+                    <input class="form-control" type="number" min="0" step="0.01" formControlName="installmentValue">
+                    <small class="text-muted">
+                        Se vazio, o sistema calcula automaticamente.
+                    </small>
+                </div>
+
+                <!-- TERCEIROS -->
+                <div class="col-md-3" *ngIf="expenseForm.value.type === 'CARTAO_EMPRESTADO'">
+                    <label class="form-label">Quem está usando o cartão?</label>
+                    <input class="form-control" type="text" formControlName="personName">
+                </div>
+
+                <!-- NOTAS -->
+                <div class="col-md-12">
+                    <label class="form-label">Observações</label>
+                    <textarea class="form-control" formControlName="notes"></textarea>
+                </div>
+
+                <div class="col-12 text-end">
+                    <button class="btn btn-primary" [disabled]="expenseForm.invalid">
+                        Salvar
+                    </button>
+                </div>
+
+            </form>
+        </div>
+    </div>
+
+    <!-- EXTRATO MENSAL -->
+    <div class="card">
+        <div class="card-body">
+
+            <h4>Extrato do mês: {{ mesFiltro || 'Todos' }}</h4>
+
+            <div *ngIf="loading">Carregando…</div>
+
+            <table *ngIf="!loading" class="table table-sm mt-3">
+                <thead>
+                    <tr>
+                        <th>Data</th>
+                        <th>Descrição</th>
+                        <th>Tipo</th>
+                        <th>Valor total</th>
+                        <th>Parcelas</th>
+                        <th>Valor/parcela</th>
+                        <th>Terceiros</th>
+                        <th class="text-end">Ações</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    <tr *ngFor="let e of despesasFiltradas">
+                        <td>{{ e.date | date:'dd/MM/yyyy' }}</td>
+                        <td>{{ e.description }}</td>
+                        <td>{{ e.type }}</td>
+                        <td>{{ e.amount | currency:'BRL' }}</td>
+                        <td>{{ getTotalParcelas(e) }}</td>
+
+                        <td>{{ getValorParcela(e) | currency:'BRL' }}</td>
+
+                        <td>{{ e.personName || '-' }}</td>
+
+                        <td class="text-end">
+                            <button class="btn btn-sm btn-primary me-2" (click)="iniciarEdicao(e)">Editar</button>
+                            <button class="btn btn-sm btn-danger" (click)="deletar(e.id)">Excluir</button>
+                        </td>
+                    </tr>
+                </tbody>
+
+                <!-- RODAPÉ COM TOTALIZADORES -->
+                <tfoot *ngIf="despesasFiltradas.length > 0">
+                    <tr class="fw-bold">
+                        <td colspan="3">Totais do mês</td>
+                        <td>{{ totalMensal | currency:'BRL' }}</td>
+                        <td></td>
+                        <td>{{ totalParcelaMensal | currency:'BRL' }}</td>
+                        <td colspan="2"></td>
+                    </tr>
+                </tfoot>
+
+            </table>
+
+        </div>
+    </div>
+    
+    <!-- PARCELAS FUTURAS (TABELA POR MÊS) -->
+    <div class="card mt-4">
+        <div class="card-body">
+            <h4>Parcelas futuras (cartão + terceiros)</h4>
+
+            <p class="text-muted mb-2">
+                A partir do mês atual até a última parcela existente.
+            </p>
+
+            <p *ngIf="mesesFuturosHeader.length === 0">
+                Não há parcelas futuras de cartão para exibir.
+            </p>
+
+            <div class="table-responsive" *ngIf="mesesFuturosHeader.length > 0">
+                <table class="table table-sm table-bordered mt-3 align-middle">
+                    <thead>
+                        <tr>
+                            <th>Despesa</th>
+                            <th>Pessoa</th>
+                            <th *ngFor="let m of mesesFuturosHeader">
+                                {{ formatMesLabel(m) }}
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr *ngFor="let linha of parcelasFuturasLinhas">
+                            <td>{{ linha.description }}</td>
+                            <td>
+                                <ng-container *ngIf="linha.isThirdParty; else meuGasto">
+                                    {{ linha.personName || 'Terceiro' }}
+                                </ng-container>
+                                <ng-template #meuGasto>-</ng-template>
+                            </td>
+                            <td *ngFor="let m of mesesFuturosHeader">
+                                <ng-container *ngIf="linha.valoresPorMes[m]; else vazioCelula">
+                                    {{ linha.valoresPorMes[m] | currency:'BRL' }}
+                                </ng-container>
+                                <ng-template #vazioCelula>-</ng-template>
+                            </td>
+                        </tr>
+                    </tbody>
+                    <tfoot>
+                        <tr class="fw-bold">
+                            <td colspan="2">Total (tudo)</td>
+                            <td *ngFor="let m of mesesFuturosHeader">
+                                {{ totaisMes[m] | currency:'BRL' }}
+                            </td>
+                        </tr>
+                        <tr class="fw-bold text-muted">
+                            <td colspan="2">Total apenas terceiros</td>
+                            <td *ngFor="let m of mesesFuturosHeader">
+                                {{ totaisMesTerceiros[m] | currency:'BRL' }}
+                            </td>
+                        </tr>
+                        <tr class="fw-bold text-muted">
+                            <td colspan="2">Total apenas meus</td>
+                            <td *ngFor="let m of mesesFuturosHeader">
+                                {{ totaisMesMeus[m] | currency:'BRL' }}
+                            </td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- BLOCO DE EDIÇÃO -->
+    <div *ngIf="editing" class="card mt-4">
+        <div class="card-body">
+
+            <h4>Editando: {{ editing.description }}</h4>
+
+            <div class="row g-2">
+
+                <div class="col-md-4">
+                    <label class="form-label">Descrição</label>
+                    <input class="form-control" [(ngModel)]="editing.description">
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label">Valor total</label>
+                    <input class="form-control" type="number" [(ngModel)]="editing.amount">
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label">Data</label>
+                    <input class="form-control" type="date" [(ngModel)]="editing.date">
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label">Parcelas</label>
+                    <input class="form-control" type="number" [(ngModel)]="editing.totalInstallments">
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label">Valor/parcela</label>
+                    <input class="form-control" type="number" [(ngModel)]="editing.installmentValue">
+                </div>
+
+                <div class="col-md-3" *ngIf="editing.type === 'CARTAO_EMPRESTADO'">
+                    <label class="form-label">Terceiro</label>
+                    <input class="form-control" [(ngModel)]="editing.personName">
+                </div>
+
+                <div class="col-md-12">
+                    <label class="form-label">Notas</label>
+                    <textarea class="form-control" [(ngModel)]="editing.notes"></textarea>
+                </div>
+            </div>
+
+            <div class="text-end mt-3">
+                <button class="btn btn-success" (click)="salvarEdicao()">Salvar</button>
+                <button class="btn btn-secondary ms-2" (click)="editing = null">Cancelar</button>
+            </div>
+
+        </div>
+    </div>
+
+</div>
