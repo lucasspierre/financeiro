@@ -1,0 +1,10 @@
+/* Estilos simples para as abas */
+.nav-link {
+    color: #555;
+    font-weight: 500;
+}
+.nav-link.active {
+    color: #000;
+    font-weight: bold;
+    border-bottom: 3px solid var(--bs-primary);
+}

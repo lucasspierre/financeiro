@@ -3,7 +3,6 @@
   <h2 class="mb-3">Entradas</h2>
 
   <!-- FILTROS -->
-
   <div class="row mb-4">
     <div class="col-md-3">
       <label class="form-label">Filtrar por mês:</label>
@@ -13,7 +12,7 @@
         (ngModelChange)="onMesFiltroChange()"
       >
         <option *ngFor="let m of mesesDisponiveis" [value]="m">
-          {{ m }}
+          {{ formatMonthLabel(m) }}
         </option>
       </select>
     </div>
@@ -27,29 +26,22 @@
   </div>
 
   <!-- CADASTRO DE ENTRADAS -->
-
   <div class="card mb-4">
     <div class="card-body">
-
       <h4 class="mb-3">Cadastrar nova entrada</h4>
-
       <form [formGroup]="incomeForm" (ngSubmit)="submitForm()" class="row g-3">
-
         <div class="col-md-4">
           <label class="form-label">Descrição</label>
           <input class="form-control" formControlName="description">
         </div>
-
         <div class="col-md-2">
           <label class="form-label">Valor (R$)</label>
           <input class="form-control" type="number" step="0.01" formControlName="amount">
         </div>
-
         <div class="col-md-2">
           <label class="form-label">Data</label>
           <input class="form-control" type="date" formControlName="date">
         </div>
-
         <div class="col-md-3">
           <label class="form-label">Tipo de entrada</label>
           <select class="form-select" formControlName="incomeType">
@@ -58,89 +50,58 @@
             </option>
           </select>
         </div>
-
-        <!-- Recorrente (salário/recorrente) -->
         <div class="col-md-2"
              *ngIf="incomeForm.value.incomeType === 'SALARIO' || incomeForm.value.incomeType === 'RECORRENTE'">
           <label class="form-label d-block">Recorrente?</label>
           <input type="checkbox" formControlName="recurring"> Sim
         </div>
-
-        <!-- Dados de reembolso -->
         <div class="col-md-3"
              *ngIf="incomeForm.value.incomeType === 'REEMBOLSO'">
           <label class="form-label">Pessoa (reembolso)</label>
           <input class="form-control" formControlName="personName">
         </div>
-
         <div class="col-md-4"
              *ngIf="incomeForm.value.incomeType === 'REEMBOLSO' && incomeForm.value.parcelaReferenteId">
           <label class="form-label">Parcela vinculada</label>
-          <input
-            class="form-control"
-            [value]="incomeForm.value.parcelaReferenteId"
-            readonly
-          >
-          <small class="text-muted">
-            Esta entrada está vinculada a uma parcela específica do cartão.
-          </small>
+          <input class="form-control" [value]="incomeForm.value.parcelaReferenteId" readonly>
+          <small class="text-muted">Vinculada a compra específica.</small>
         </div>
-
         <div class="col-md-12">
           <label class="form-label">Observações</label>
           <textarea class="form-control" formControlName="notes"></textarea>
         </div>
-
         <div class="col-12 text-end">
-          <button class="btn btn-primary" [disabled]="incomeForm.invalid">
-            Salvar
-          </button>
+          <button class="btn btn-primary" [disabled]="incomeForm.invalid">Salvar</button>
         </div>
-
       </form>
     </div>
   </div>
 
-  <!-- REEMBOLSOS PENDENTES DO MÊS -->
-
-  <div class="card mb-4">
+  <!-- REEMBOLSOS PENDENTES -->
+  <div class="card mb-4" *ngIf="reembolsosPendentesMes.length > 0">
     <div class="card-body">
-
-      <h4 class="mb-3">Reembolsos pendentes deste mês</h4>
-
-      <p *ngIf="reembolsosPendentesMes.length === 0">
-        Nenhuma parcela de terceiros pendente para este mês.
-      </p>
-
-      <ul *ngIf="reembolsosPendentesMes.length > 0">
-        <li *ngFor="let p of reembolsosPendentesMes">
-          {{ p.personName || 'Terceiro' }} —
-          {{ p.description }} —
-          Parcela {{ p.numero }}/{{ p.total }} —
-          {{ p.valor | currency:'BRL' }}
-
-          <button
-            class="btn btn-sm btn-outline-success ms-2"
-            (click)="preencherReembolso(p)"
-          >
-            Lançar como entrada
-          </button>
+      <h4 class="mb-3 text-warning">⚠ Reembolsos pendentes deste mês</h4>
+      <ul class="list-group">
+        <li *ngFor="let p of reembolsosPendentesMes" class="list-group-item d-flex justify-content-between align-items-center">
+          <div>
+            <strong>{{ p.personName || 'Terceiro' }}</strong> — {{ p.description }}
+            <span class="badge bg-secondary ms-2">Parcela {{ p.numero }}/{{ p.total }}</span>
+          </div>
+          <div class="d-flex align-items-center">
+            <span class="me-3 fw-bold">{{ p.valor | currency:'BRL' }}</span>
+            <button class="btn btn-sm btn-success" (click)="preencherReembolso(p)">Receber</button>
+          </div>
         </li>
       </ul>
-
     </div>
   </div>
 
-  <!-- EXTRATO DE ENTRADAS DO MÊS -->
-
-  <div class="card">
+  <!-- EXTRATO -->
+  <div class="card mb-5">
     <div class="card-body">
-
-      <h4>Entradas do mês: {{ mesFiltro || 'Todos' }}</h4>
-
+      <h4>Extrato do mês: {{ formatMonthLabel(mesFiltro) || 'Todos' }}</h4>
       <div *ngIf="loading">Carregando…</div>
-
-      <table *ngIf="!loading" class="table table-sm mt-3">
+      <table *ngIf="!loading" class="table table-sm mt-3 align-middle">
         <thead>
           <tr>
             <th>Data</th>
@@ -152,23 +113,30 @@
             <th class="text-end">Ações</th>
           </tr>
         </thead>
-
         <tbody>
-          <tr *ngFor="let i of incomesFiltradas">
+          <tr *ngFor="let i of filteredIncomes" [class.table-warning]="i.id.startsWith('VIRTUAL-')">
             <td>{{ i.date | date:'dd/MM/yyyy' }}</td>
-            <td>{{ i.description }}</td>
+            <td>
+                {{ i.description }}
+                <span *ngIf="i.id.startsWith('VIRTUAL-')" class="badge bg-warning text-dark ms-1">Previsto</span>
+            </td>
             <td>{{ i.incomeType }}</td>
-            <td>{{ i.amount | currency:'BRL' }}</td>
+            <td class="font-monospace">{{ i.amount | currency:'BRL' }}</td>
             <td>{{ i.personName || '-' }}</td>
             <td>{{ i.recurring ? 'Sim' : 'Não' }}</td>
             <td class="text-end">
-              <button class="btn btn-sm btn-primary me-2" (click)="iniciarEdicao(i)">Editar</button>
-              <button class="btn btn-sm btn-danger" (click)="deletar(i.id)">Excluir</button>
+              <ng-container *ngIf="i.id.startsWith('VIRTUAL-'); else botoesNormais">
+                  <button class="btn btn-sm btn-success me-2" (click)="confirmarVirtual(i)">Confirmar</button>
+                  <button class="btn btn-sm btn-outline-primary" (click)="iniciarEdicao(i)">Editar</button>
+              </ng-container>
+              <ng-template #botoesNormais>
+                  <button class="btn btn-sm btn-primary me-2" (click)="iniciarEdicao(i)">Editar</button>
+                  <button class="btn btn-sm btn-danger" (click)="deletar(i.id)">Excluir</button>
+              </ng-template>
             </td>
           </tr>
         </tbody>
-
-        <tfoot *ngIf="incomesFiltradas.length > 0">
+        <tfoot *ngIf="filteredIncomes.length > 0">
           <tr class="fw-bold">
             <td colspan="3">Totais do mês</td>
             <td>{{ totalMensal | currency:'BRL' }}</td>
@@ -176,67 +144,7 @@
             <td colspan="2"></td>
           </tr>
         </tfoot>
-
       </table>
-
-    </div>
-  </div>
-
-  <!-- BLOCO DE EDIÇÃO -->
-
-  <div *ngIf="editing" class="card mt-4">
-    <div class="card-body">
-      <h4>Editando: {{ editing.description }}</h4>
-
-      <div class="row g-2">
-        <div class="col-md-4">
-          <label class="form-label">Descrição</label>
-          <input class="form-control" [(ngModel)]="editing.description">
-        </div>
-
-        <div class="col-md-2">
-          <label class="form-label">Valor</label>
-          <input class="form-control" type="number" [(ngModel)]="editing.amount">
-        </div>
-
-        <div class="col-md-2">
-          <label class="form-label">Data</label>
-          <input class="form-control" type="date" [(ngModel)]="editing.date">
-        </div>
-
-        <div class="col-md-2">
-          <label class="form-label">Tipo</label>
-          <input class="form-control" [value]="editing.incomeType" disabled>
-        </div>
-
-        <div class="col-md-2">
-          <label class="form-label">Recorrente</label>
-          <select class="form-select" [(ngModel)]="editing.recurring">
-            <option [ngValue]="true">Sim</option>
-            <option [ngValue]="false">Não</option>
-          </select>
-        </div>
-
-        <div class="col-md-3" *ngIf="editing.incomeType === 'REEMBOLSO'">
-          <label class="form-label">Pessoa</label>
-          <input class="form-control" [(ngModel)]="editing.personName">
-        </div>
-
-        <div class="col-md-4" *ngIf="editing.incomeType === 'REEMBOLSO' && editing.parcelaReferenteId">
-          <label class="form-label">Parcela vinculada</label>
-          <input class="form-control" [value]="editing.parcelaReferenteId" readonly>
-        </div>
-
-        <div class="col-md-12">
-          <label class="form-label">Notas</label>
-          <textarea class="form-control" [(ngModel)]="editing.notes"></textarea>
-        </div>
-      </div>
-
-      <div class="text-end mt-3">
-        <button class="btn btn-success" (click)="salvarEdicao()">Salvar</button>
-        <button class="btn btn-secondary ms-2" (click)="editing = null">Cancelar</button>
-      </div>
     </div>
   </div>
 

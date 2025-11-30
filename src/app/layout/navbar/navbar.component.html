@@ -1,54 +1,26 @@
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
   <div class="container-fluid">
     <a class="navbar-brand" routerLink="/">Financeiro</a>
-
-    <button
-      class="navbar-toggler"
-      type="button"
-      data-bs-toggle="collapse"
-      data-bs-target="#navbarNav"
-      aria-controls="navbarNav"
-      aria-expanded="false"
-      aria-label="Toggle navigation"
-    >
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
       <span class="navbar-toggler-icon"></span>
     </button>
-
     <div class="collapse navbar-collapse" id="navbarNav">
       <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-
         <li class="nav-item">
-          <a
-            class="nav-link"
-            routerLink="/"
-            routerLinkActive="active"
-            [routerLinkActiveOptions]="{ exact: true }"
-            >Dashboard</a>
-        </li>
-
-        <li class="nav-item">
-          <a
-            class="nav-link"
-            routerLink="/expenses"
-            routerLinkActive="active"
-            >Despesas</a>
-        </li>
-
-        <li class="nav-item">
-          <a
-            class="nav-link"
-            routerLink="/incomes"
-            routerLinkActive="active"
-            >Entradas</a>
+          <a class="nav-link" routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">Dashboard</a>
         </li>
         <li class="nav-item">
-          <a
-            class="nav-link"
-            routerLink="/config"
-            routerLinkActive="active"
-            >Configurações</a>
+          <a class="nav-link" routerLink="/cards" routerLinkActive="active">Cartões</a>
         </li>
-
+        <li class="nav-item">
+          <a class="nav-link" routerLink="/expenses" routerLinkActive="active">Contas</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" routerLink="/incomes" routerLinkActive="active">Entradas</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" routerLink="/config" routerLinkActive="active">Config</a>
+        </li>
       </ul>
     </div>
   </div>

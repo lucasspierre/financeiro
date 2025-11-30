@@ -1,7 +1,16 @@
+// Modelo de Cartão de Crédito
+export interface CreditCard {
+  id: string;
+  name: string;       // Ex: "Nubank", "Inter"
+  // holder: string;  <-- REMOVIDO
+  closingDay: number; // Dia do fechamento da fatura
+  dueDay: number;     // Dia do vencimento
+  color?: string;     // Para diferenciar na UI (opcional)
+}
+
 // TIPOS DE DESPESA
 export type ExpenseType =
-  | 'CARTAO'            // Seu cartão (à vista ou parcelado)
-  | 'CARTAO_EMPRESTADO' // Cartão emprestado para terceiros
+  | 'CARTAO'            // Gasto no cartão de crédito
   | 'PIX_DEBITO'        // Pagamentos à vista (Pix / Débito)
   | 'FINANCIAMENTO';    // Financiamentos / Empréstimos
 
@@ -12,14 +21,17 @@ export interface Expense {
   date: string;        // data da compra
   type: ExpenseType;
 
-  totalInstallments?: number; // número de parcelas (se vazio -> 1)
-  installmentValue?: number;  // valor da parcela (opcional)
+  // Campos específicos de cartão
+  cardId?: string;            // ID do cartão utilizado
+  totalInstallments?: number; // número de parcelas
+  installmentValue?: number;  // valor da parcela
 
-  personName?: string;        // apenas para CARTAO_EMPRESTADO
-  notes?: string;
+  // Campos opcionais
+  personName?: string;        // Quem fez a compra (se vazio = Titular/Eu)
+  notes?: string;             // Observação
 }
 
-// TIPOS DE ENTRADA
+// ... IncomeType e Income permanecem iguais ...
 export type IncomeType =
   | 'SALARIO'
   | 'RECORRENTE'
@@ -31,23 +43,21 @@ export interface Income {
   description: string;
   amount: number;
   date: string;
-
   incomeType: IncomeType;
   recurring?: boolean;
   notes?: string;
-
-  // Para reembolso de cartão
-  personName?: string;        // quem está te pagando
-  parcelaReferenteId?: string; // id da parcela gerada a partir da despesa
+  personName?: string;
+  parcelaReferenteId?: string;
 }
 
 export interface FinanceConfig {
-  monthlyLimit: number;   // teto mensal
-  referenceMonth: string; // "YYYY-MM"
+  monthlyLimit: number;
+  referenceMonth: string;
 }
 
 export interface FinanceSnapshot {
   expenses: Expense[];
   incomes: Income[];
+  cards: CreditCard[];
   config: FinanceConfig;
 }

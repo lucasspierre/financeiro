@@ -6,6 +6,7 @@ import {
   Income,
   FinanceSnapshot,
   FinanceConfig,
+  CreditCard, // Importar
 } from '../models/finance.models';
 
 @Injectable({ providedIn: 'root' })
@@ -18,6 +19,20 @@ export class FinanceApiService {
   getSnapshot(): Observable<FinanceSnapshot> {
     return this.http.get<FinanceSnapshot>(`${this.BASE_URL}/snapshot`);
   }
+
+  // --- CARTOES (NOVO) ---
+  addCard(card: Omit<CreditCard, 'id'>): Observable<CreditCard> {
+    return this.http.post<CreditCard>(`${this.BASE_URL}/cards`, card);
+  }
+
+  updateCard(id: string, payload: Partial<CreditCard>): Observable<any> {
+    return this.http.put(`${this.BASE_URL}/cards/${id}`, payload);
+  }
+
+  deleteCard(id: string): Observable<any> {
+    return this.http.delete(`${this.BASE_URL}/cards/${id}`);
+  }
+  // ----------------------
 
   // DESPESAS
   addExpense(expense: Omit<Expense, 'id'>): Observable<Expense> {
