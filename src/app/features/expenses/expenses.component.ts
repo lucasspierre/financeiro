@@ -6,7 +6,7 @@ import {
   ExpenseType,
   FinanceSnapshot,
   CreditCard
-} from '../../core/models/finance.models';
+} from '../../core/models/finance.models'; 
 import {
   FormBuilder,
   ReactiveFormsModule,
@@ -14,6 +14,7 @@ import {
   FormsModule,
 } from '@angular/forms';
 import { gerarParcelasDeUmaDespesa, gerarRangeMeses, addMeses } from '../../core/utils/parcelas';
+import { forkJoin, Observable } from 'rxjs'; 
 
 // Interface unificada para exibição na tabela
 interface ExpenseViewItem {
@@ -24,6 +25,19 @@ interface ExpenseViewItem {
   categoryLabel: string;  // "Pix", "Financiamento", "Cartão"
   amount: number;
   cardId?: string;        // Se for fatura, qual cartão
+  isPaid?: boolean;       // Indica se a conta foi paga
+}
+
+// Interface para os Detalhes da Parcela na Fatura
+interface ParcelaDetalhe {
+    description: string;
+    amountTotal: number; // Valor total da compra original
+    parcelaAtual: number; // Número da parcela neste mês
+    parcelasTotal: number; // Total de parcelas
+    valorParcela: number; // Valor desta parcela (que compõe a fatura)
+    saldoRestante: number; // Saldo a pagar após esta parcela
+    dateCompra: string;
+    personName?: string;
 }
 
 @Component({
@@ -49,6 +63,12 @@ export class ExpensesComponent implements OnInit {
   sortOrder: string = 'DATE_ASC';
 
   mesesDisponiveis: string[] = [];
+  
+  // Propriedades para Detalhes da Fatura
+  showDetailsModal = false;
+  faturaDetalhes: ParcelaDetalhe[] = [];
+  faturaDetalhesCardName: string = '';
+  faturaDetalhesTotal: number = 0;
 
   // Formulário
   expenseTypes: { value: ExpenseType; label: string }[] = [
@@ -65,6 +85,7 @@ export class ExpensesComponent implements OnInit {
     date: ['', Validators.required],
     type: ['PIX_DEBITO' as ExpenseType, Validators.required],
     notes: [''],
+    // isRecurring: [false], // REMOVIDO
   });
 
   ngOnInit() {
@@ -78,13 +99,16 @@ export class ExpensesComponent implements OnInit {
         this.snapshot = snap;
         this.processarDespesasHibridas();
         
+        // Define o mês de filtro após o processamento
         if (!this.filterMonth && this.mesesDisponiveis.length > 0) {
              const hoje = new Date();
              const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`;
              
+             // Prioriza o mês atual, se estiver no range
              if (this.mesesDisponiveis.includes(mesAtual)) {
                  this.filterMonth = mesAtual;
              } else {
+                 // Caso contrário, usa o primeiro mês disponível
                  this.filterMonth = this.mesesDisponiveis[0];
              }
         }
@@ -102,59 +126,80 @@ export class ExpensesComponent implements OnInit {
     return `${mes}/${ano}`;
   }
 
+  // Helper para faturas (mantido inalterado)
+  private getPurchasesForFatura(cardId: string, dueMonth: string, card: CreditCard | undefined): Expense[] {
+      const purchases = this.snapshot.expenses.filter(e => e.type === 'CARTAO' && e.cardId === cardId);
+      const bestPurchaseDay = card ? card.bestPurchaseDay : 1;
+      const diaVencimento = card ? card.dueDay : 10;
+
+      const contributingPurchases: Expense[] = [];
+
+      for (const purchase of purchases) {
+          const parcels = gerarParcelasDeUmaDespesa(purchase, bestPurchaseDay, diaVencimento);
+          
+          const parcelDueThisMonth = parcels.find(p => addMeses(p.mesReferencia, 1) === dueMonth);
+          
+          if (parcelDueThisMonth) {
+              contributingPurchases.push(purchase);
+          }
+      }
+      return contributingPurchases;
+  }
+
+
   processarDespesasHibridas() {
     this.allItems = [];
     
-    let minMes = '9999-99';
-    let maxMes = '0000-00';
+    // 1. Determinação do Range de Meses
     const hoje = new Date().toISOString().substring(0, 7);
+    let minMes = hoje;
+    let maxMes = hoje; 
     
-    // O range de meses para o filtro é baseado no MÊS DE VENCIMENTO.
-    if (hoje < minMes) minMes = hoje;
-    if (hoje > maxMes) maxMes = hoje;
+    // Garante que o range inclui o mês da despesa mais antiga
+    this.snapshot.expenses.forEach(e => {
+        const mesRef = e.date.substring(0, 7);
+        if (mesRef < minMes) minMes = mesRef;
+    });
 
-    // 1. Contas (Data de Vencimento = Data de Referência/Competência)
+    // 2. Contas Avulsas (Pix/Financiamento) - SEM LÓGICA DE RECORRÊNCIA
     const contas = this.snapshot.expenses.filter(e => e.type !== 'CARTAO');
+    
     for (const c of contas) {
         const mesRef = c.date.substring(0, 7); 
+        
+        // Adiciona apenas o item que existe no DB. Nenhuma projeção.
         this.allItems.push({
-            id: c.id,
+            id: c.id, 
             type: 'CONTA',
-            date: c.date, // Data de Vencimento é a data da conta
+            date: c.date, 
             description: c.description,
             categoryLabel: c.type === 'PIX_DEBITO' ? 'Pix/Débito' : 'Financiamento',
-            amount: c.amount
+            amount: c.amount,
+            isPaid: c.isPaid,           
         });
-        if (mesRef < minMes) minMes = mesRef;
+
+        // Atualiza o range com base nas datas de vencimento das contas (inalterado)
         if (mesRef > maxMes) maxMes = mesRef;
     }
-
-    // 2. Faturas (Data de Vencimento)
-    // CORREÇÃO 1: Devemos filtrar APENAS as compras de CARTÃO.
-    const comprasCartao = this.snapshot.expenses.filter(e => e.type === 'CARTAO');
     
-    // O mapa deve agrupar pelo MÊS DE VENCIMENTO (Due Month), pois a filtragem da lista final é por VENCIMENTO.
+    // 3. Faturas (o cálculo das faturas permanece igual)
+    const comprasCartao = this.snapshot.expenses.filter(e => e.type === 'CARTAO');
     const faturasMap = new Map<string, number>();
 
     for (const compra of comprasCartao) {
         const card = this.snapshot.cards.find(c => c.id === compra.cardId);
         const bestPurchaseDay = card ? card.bestPurchaseDay : 1;
-        const parcelas = gerarParcelasDeUmaDespesa(compra, bestPurchaseDay);
+        const diaVencimento = card ? card.dueDay : 10;
+        const parcelas = gerarParcelasDeUmaDespesa(compra, bestPurchaseDay, diaVencimento);
 
         for (const p of parcelas) {
-            // mesRef é o mês de competência (Referência)
-            const mesRef = p.mesReferencia; 
-            
-            // CORREÇÃO 2: O mês de vencimento (Due Month) é o MÊS DE REFERÊNCIA + 1 MÊS
-            const dueMonth = addMeses(mesRef, 1);
-            
-            // A chave de agrupamento deve ser baseada no MÊS DE VENCIMENTO e no Card ID
+            const dueMonth = addMeses(p.mesReferencia, 1);
             const chave = `${compra.cardId || 'unknown'}|${dueMonth}`; 
             
             const atual = faturasMap.get(chave) || 0;
             faturasMap.set(chave, atual + p.valor);
             
-            // Usa o mês de vencimento para determinar o range dos filtros
+            // Atualiza o range com base nas datas de vencimento das faturas
             if (dueMonth > maxMes) maxMes = dueMonth;
             if (dueMonth < minMes) minMes = dueMonth;
         }
@@ -162,32 +207,133 @@ export class ExpensesComponent implements OnInit {
 
     // Gerando a lista final de Faturas a partir do mapa agrupado por Mês de Vencimento
     for (const [chave, valor] of faturasMap) {
-        const [cardId, dueMonth] = chave.split('|'); // dueMonth é o Mês de Vencimento
-        const card = this.snapshot.cards.find(c => c.id === cardId);
+        const [cardId, dueMonth] = chave.split('|'); 
         
-        // Dia de Vencimento
-        const diaVenc = card ? String(card.dueDay).padStart(2, '0') : '10';
-        // Data de Vencimento
-        const dataVencimento = `${dueMonth}-${diaVenc}`;
+        // Filtra para exibir apenas as faturas dentro do range de meses
+        if (dueMonth >= minMes && dueMonth <= maxMes) {
+            const card = this.snapshot.cards.find(c => c.id === cardId);
+            
+            const comprasDaFatura = this.getPurchasesForFatura(cardId, dueMonth, card);
+            const allPaid = comprasDaFatura.length > 0 && comprasDaFatura.every(e => e.isPaid);
+            
+            const diaVenc = card ? String(card.dueDay).padStart(2, '0') : '10';
+            const dataVencimento = `${dueMonth}-${diaVenc}`;
 
-        this.allItems.push({
-            type: 'FATURA',
-            date: dataVencimento, // Data de Vencimento (usada para filtragem)
-            description: `Fatura ${card ? card.name : 'Cartão'}`,
-            categoryLabel: 'Fatura Cartão',
-            amount: valor,
-            cardId: cardId === 'unknown' ? undefined : cardId
-        });
+            this.allItems.push({
+                type: 'FATURA',
+                date: dataVencimento, 
+                description: `Fatura ${card ? card.name : 'Cartão'}`,
+                categoryLabel: 'Fatura Cartão',
+                amount: valor,
+                cardId: cardId === 'unknown' ? undefined : cardId,
+                isPaid: allPaid
+            });
+        }
     }
 
-    // O range de meses disponíveis agora considera o mês de Vencimento das faturas/contas
     this.mesesDisponiveis = gerarRangeMeses(minMes, maxMes);
+  }
+  
+  // Método para carregar os detalhes da fatura (inalterado)
+  openFaturaDetails(item: ExpenseViewItem) {
+    if (item.type !== 'FATURA' || !item.cardId) return;
+
+    this.faturaDetalhes = [];
+    this.faturaDetalhesTotal = 0;
+    
+    const card = this.snapshot.cards.find(c => c.id === item.cardId);
+    if (!card) return;
+
+    this.faturaDetalhesCardName = card.name;
+    const dueMonth = item.date.substring(0, 7); 
+
+    const despesasCartao = this.snapshot.expenses.filter(e => e.type === 'CARTAO' && e.cardId === item.cardId);
+    
+    const bestPurchaseDay = card.bestPurchaseDay;
+    const diaVencimento = card.dueDay;
+
+    for (const compra of despesasCartao) {
+        const parcelas = gerarParcelasDeUmaDespesa(compra, bestPurchaseDay, diaVencimento);
+        const parcelaPagaNesteMes = parcelas.find(p => addMeses(p.mesReferencia, 1) === dueMonth);
+
+        if (parcelaPagaNesteMes) {
+            const nextMesCompetencia = addMeses(parcelaPagaNesteMes.mesReferencia, 1);
+            
+            const saldoRestante = parcelas
+              .filter(p => p.mesReferencia >= nextMesCompetencia) 
+              .reduce((sum, p) => sum + p.valor, 0);
+
+            const detalhe: ParcelaDetalhe = {
+                description: compra.description,
+                amountTotal: compra.amount,
+                parcelaAtual: parcelaPagaNesteMes.numero,
+                parcelasTotal: parcelaPagaNesteMes.total,
+                valorParcela: parcelaPagaNesteMes.valor,
+                saldoRestante: saldoRestante,
+                dateCompra: compra.date,
+                personName: compra.personName
+            };
+            this.faturaDetalhes.push(detalhe);
+            this.faturaDetalhesTotal += detalhe.valorParcela;
+        }
+    }
+    
+    this.faturaDetalhes.sort((a, b) => a.dateCompra.localeCompare(b.dateCompra));
+
+    this.showDetailsModal = true;
+  }
+  
+  closeFaturaDetails() {
+    this.showDetailsModal = false;
+  }
+
+  // Marcar/Desmarcar como pago (incluindo faturas)
+  markAsPaid(item: ExpenseViewItem) {
+    if (!item.id && item.type === 'CONTA') {
+        alert('Esta é uma conta virtual/recorrente. Apenas itens com ID real podem ser pagos no DB. Por favor, lance a conta real no formulário.');
+        return;
+    }
+    
+    const newStatus = !item.isPaid; 
+    let updateObservables: Observable<any>[] = [];
+
+    if (item.type === 'CONTA' && item.id) {
+      // 1. CONTA AVULSA (single update)
+      updateObservables.push(this.api.updateExpense(item.id, { isPaid: newStatus }));
+
+    } else if (item.type === 'FATURA' && item.cardId) {
+      // 2. FATURA (multiple updates nos itens base)
+      const card = this.snapshot.cards.find(c => c.id === item.cardId);
+      const dueMonth = item.date.substring(0, 7);
+      
+      const purchasesToUpdate = this.getPurchasesForFatura(item.cardId, dueMonth, card);
+      
+      // Coleta todos os Observables de atualização da API (um para cada compra na fatura)
+      updateObservables = purchasesToUpdate.map(p => 
+          this.api.updateExpense(p.id, { isPaid: newStatus })
+      );
+
+    } else {
+      return;
+    }
+
+    // Executa todas as atualizações em paralelo e recarrega após a conclusão
+    if (updateObservables.length > 0) {
+        forkJoin(updateObservables).subscribe({
+            next: () => {
+                this.loadData();
+            },
+            error: (err) => {
+                console.error('Erro ao atualizar status de pagamento:', err);
+                alert(`Erro ao marcar como ${newStatus ? 'pago' : 'não pago'}.`);
+            }
+        });
+    }
   }
 
   get filteredItems(): ExpenseViewItem[] {
       let list = [...this.allItems];
 
-      // filterMonth agora representa o MÊS DE VENCIMENTO
       if (this.filterMonth) {
           list = list.filter(item => item.date.startsWith(this.filterMonth));
       }
@@ -228,6 +374,7 @@ export class ExpensesComponent implements OnInit {
       date: val.date!,
       type: val.type!,
       notes: val.notes || undefined,
+      isPaid: false 
     };
 
     this.api.addExpense(newExpense).subscribe(() => {
@@ -239,12 +386,12 @@ export class ExpensesComponent implements OnInit {
     });
   }
 
+  // Remoção do Pop-up de Confirmação e exclusão imediata.
   deletar(item: ExpenseViewItem) {
       if (item.type === 'FATURA') {
           alert('Para alterar o valor da fatura, vá na aba "Cartões" e edite as compras deste mês.');
           return;
       }
-      if (!confirm('Deseja realmente excluir esta conta?')) return;
       this.api.deleteExpense(item.id!).subscribe(() => this.loadData());
   }
 }

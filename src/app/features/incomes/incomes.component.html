@@ -1,30 +1,6 @@
 <div class="container py-3">
 
-  <h2 class="mb-3">Entradas</h2>
-
-  <!-- FILTROS -->
-  <div class="row mb-4">
-    <div class="col-md-3">
-      <label class="form-label">Filtrar por mês:</label>
-      <select
-        class="form-select"
-        [(ngModel)]="mesFiltro"
-        (ngModelChange)="onMesFiltroChange()"
-      >
-        <option *ngFor="let m of mesesDisponiveis" [value]="m">
-          {{ formatMonthLabel(m) }}
-        </option>
-      </select>
-    </div>
-
-    <div class="col-md-3 d-flex align-items-end">
-      <div>
-        <div><strong>Total do mês:</strong> {{ totalMensal | currency:'BRL' }}</div>
-        <div><strong>Reembolsos:</strong> {{ totalReembolsosMensal | currency:'BRL' }}</div>
-      </div>
-    </div>
-  </div>
-
+    <h2 class="mb-3">Entradas</h2>
   <!-- CADASTRO DE ENTRADAS -->
   <div class="card mb-4">
     <div class="card-body">
@@ -51,17 +27,16 @@
           </select>
         </div>
         <div class="col-md-2"
-             *ngIf="incomeForm.value.incomeType === 'SALARIO' || incomeForm.value.incomeType === 'RECORRENTE'">
+          *ngIf="incomeForm.value.incomeType === 'SALARIO' || incomeForm.value.incomeType === 'RECORRENTE'">
           <label class="form-label d-block">Recorrente?</label>
           <input type="checkbox" formControlName="recurring"> Sim
         </div>
-        <div class="col-md-3"
-             *ngIf="incomeForm.value.incomeType === 'REEMBOLSO'">
+        <div class="col-md-3" *ngIf="incomeForm.value.incomeType === 'REEMBOLSO'">
           <label class="form-label">Pessoa (reembolso)</label>
           <input class="form-control" formControlName="personName">
         </div>
         <div class="col-md-4"
-             *ngIf="incomeForm.value.incomeType === 'REEMBOLSO' && incomeForm.value.parcelaReferenteId">
+          *ngIf="incomeForm.value.incomeType === 'REEMBOLSO' && incomeForm.value.parcelaReferenteId">
           <label class="form-label">Parcela vinculada</label>
           <input class="form-control" [value]="incomeForm.value.parcelaReferenteId" readonly>
           <small class="text-muted">Vinculada a compra específica.</small>
@@ -82,11 +57,12 @@
     <div class="card-body">
       <h4 class="mb-3 text-warning">⚠ Reembolsos pendentes deste mês</h4>
       <ul class="list-group">
-        <li *ngFor="let p of reembolsosPendentesMes" class="list-group-item d-flex justify-content-between align-items-center">
+        <li *ngFor="let p of reembolsosPendentesMes"
+          class="list-group-item d-flex justify-content-between align-items-center">
           <div>
             <strong>{{ p.personName || 'Terceiro' }}</strong> — {{ p.description }}
             <span class="badge bg-secondary ms-2">Parcela {{ p.numero }}/{{ p.total }}</span>
-          </div>
+          </div><!--  -->
           <div class="d-flex align-items-center">
             <span class="me-3 fw-bold">{{ p.valor | currency:'BRL' }}</span>
             <button class="btn btn-sm btn-success" (click)="preencherReembolso(p)">Receber</button>
@@ -96,56 +72,90 @@
     </div>
   </div>
 
-  <!-- EXTRATO -->
   <div class="card mb-5">
-    <div class="card-body">
-      <h4>Extrato do mês: {{ formatMonthLabel(mesFiltro) || 'Todos' }}</h4>
-      <div *ngIf="loading">Carregando…</div>
-      <table *ngIf="!loading" class="table table-sm mt-3 align-middle">
-        <thead>
-          <tr>
-            <th>Data</th>
-            <th>Descrição</th>
-            <th>Tipo</th>
-            <th>Valor</th>
-            <th>Pessoa</th>
-            <th>Recorrente</th>
-            <th class="text-end">Ações</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr *ngFor="let i of filteredIncomes" [class.table-warning]="i.id.startsWith('VIRTUAL-')">
-            <td>{{ i.date | date:'dd/MM/yyyy' }}</td>
-            <td>
+    <div class="card-body p-3">
+
+      <div class="p-3 bg-white border-bottom">
+        <div class="row g-2 align-items-center">
+          <div class="col-md-3">
+            <label class="form-label small mb-1 fw-bold">Filtrar Mês</label>
+            <select class="form-select form-select-sm" [(ngModel)]="mesFiltro" (ngModelChange)="onMesFiltroChange()">
+              <option *ngFor="let m of mesesDisponiveis" [value]="m">
+                {{ formatMonthLabel(m) }}
+              </option>
+            </select>
+          </div>
+
+          <div class="col-md-3">
+            <label class="form-label small mb-1 fw-bold">Ordenação</label>
+            <select class="form-select form-select-sm" [(ngModel)]="sortOrder" (ngModelChange)="processarFiltros()">
+              <option value="DATE_DESC">📅 Mais Recente</option>
+              <option value="DATE_ASC">📅 Mais Antiga</option>
+              <option value="VAL_DESC">💲 Maior Valor</option>
+              <option value="VAL_ASC">💲 Menor Valor</option>
+            </select>
+          </div>
+
+          <div class="col-md-6 text-end align-self-end">
+            <span class="badge bg-light text-dark border">{{ filteredIncomes.length }} itens (Mês: {{
+              formatMonthLabel(mesFiltro) }})</span>
+          </div>
+        </div>
+      </div>
+      <div *ngIf="loading" class="p-3">Carregando…</div>
+
+      <div class="table-responsive">
+        <table *ngIf="!loading" class="table table-sm mb-0 align-middle">
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th>Descrição</th>
+              <th>Tipo</th>
+              <th>Valor</th>
+              <th>Pessoa</th>
+              <th>Recorrente</th>
+              <th class="text-end">Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let i of filteredIncomes" [class.table-warning]="i.id?.startsWith('VIRTUAL-')">
+              <td>{{ i.date | date:'dd/MM/yyyy' }}</td>
+              <td>
                 {{ i.description }}
-                <span *ngIf="i.id.startsWith('VIRTUAL-')" class="badge bg-warning text-dark ms-1">Previsto</span>
-            </td>
-            <td>{{ i.incomeType }}</td>
-            <td class="font-monospace">{{ i.amount | currency:'BRL' }}</td>
-            <td>{{ i.personName || '-' }}</td>
-            <td>{{ i.recurring ? 'Sim' : 'Não' }}</td>
-            <td class="text-end">
-              <ng-container *ngIf="i.id.startsWith('VIRTUAL-'); else botoesNormais">
+                <span *ngIf="i.id?.startsWith('VIRTUAL-')" class="badge bg-warning text-dark ms-1">Previsto</span>
+              </td>
+              <td>{{ i.incomeType }}</td>
+              <td class="font-monospace">{{ i.amount | currency:'BRL' }}</td>
+              <td>{{ i.personName || '-' }}</td>
+              <td>{{ i.recurring ? 'Sim' : 'Não' }}</td>
+              <td class="text-end">
+                <ng-container *ngIf="i.id?.startsWith('VIRTUAL-'); else botoesNormais">
                   <button class="btn btn-sm btn-success me-2" (click)="confirmarVirtual(i)">Confirmar</button>
                   <button class="btn btn-sm btn-outline-primary" (click)="iniciarEdicao(i)">Editar</button>
-              </ng-container>
-              <ng-template #botoesNormais>
+                </ng-container>
+                <ng-template #botoesNormais>
                   <button class="btn btn-sm btn-primary me-2" (click)="iniciarEdicao(i)">Editar</button>
                   <button class="btn btn-sm btn-danger" (click)="deletar(i.id)">Excluir</button>
-              </ng-template>
-            </td>
-          </tr>
-        </tbody>
-        <tfoot *ngIf="filteredIncomes.length > 0">
-          <tr class="fw-bold">
-            <td colspan="3">Totais do mês</td>
-            <td>{{ totalMensal | currency:'BRL' }}</td>
-            <td colspan="1">Reembolsos: {{ totalReembolsosMensal | currency:'BRL' }}</td>
-            <td colspan="2"></td>
-          </tr>
-        </tfoot>
-      </table>
+                </ng-template>
+              </td>
+            </tr>
+            <tr *ngIf="filteredIncomes.length === 0">
+              <td colspan="7" class="text-center text-muted py-4">Nenhuma entrada encontrada para este filtro.</td>
+            </tr>
+          </tbody>
+
+          <tfoot *ngIf="filteredIncomes.length > 0" class="table-light border-top">
+            <tr class="fw-bold">
+              <td colspan="3" class="text-end">TOTAL DE ENTRADAS:</td>
+              <td class="text-end text-success font-monospace">{{ totalMensal | currency:'BRL' }}</td>
+              <td colspan="3" class="text-end">REEMBOLSOS: {{ totalReembolsosMensal | currency:'BRL' }}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+         
     </div>
+     
   </div>
 
 </div>

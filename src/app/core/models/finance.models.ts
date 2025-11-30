@@ -28,6 +28,8 @@ export interface Expense {
   // Campos opcionais
   personName?: string;        // Quem fez a compra (se vazio = Titular/Eu)
   notes?: string;             // Observação
+  
+  isPaid?: boolean;           // Se a conta já foi paga (para Pix/Financiamento)
 }
 
 // TIPOS DE ENTRADA

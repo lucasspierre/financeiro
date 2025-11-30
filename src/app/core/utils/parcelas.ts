@@ -33,6 +33,7 @@ export function gerarParcelasDeUmaDespesa(
   const dataCompra = new Date(expense.date + 'T12:00:00');
   
   // Calcula o mês da primeira parcela (Competência)
+  // O diaVencimento agora é crucial para o cálculo.
   const mesInicial = getMesReferenciaInicial(dataCompra, bestPurchaseDay, diaVencimento);
 
   const qtd = expense.totalInstallments && expense.totalInstallments > 0 ? expense.totalInstallments : 1;
@@ -59,29 +60,59 @@ export function gerarParcelasDeUmaDespesa(
   return parcelas;
 }
 
+/**
+ * Calcula o Mês de Competência da fatura (Mês de Referência).
+ * O vencimento real da fatura será Mês de Competência + 1.
+ * * @param dataCompra Data da compra.
+ * @param bestPurchaseDay O dia seguinte ao fechamento (o melhor dia de compra).
+ * @param diaVencimento Dia de vencimento da fatura.
+ * @returns Mês de Competência no formato "YYYY-MM".
+ */
 export function getMesReferenciaInicial(dataCompra: Date, bestPurchaseDay: number, diaVencimento: number): string {
-  let ano = dataCompra.getFullYear();
-  let mes = dataCompra.getMonth(); // 0-11 (Mês da Compra)
-  const dia = dataCompra.getDate(); // Dia da Compra
+  const diaCompra = dataCompra.getDate();
+  const mesCompraStr = `${dataCompra.getFullYear()}-${String(dataCompra.getMonth() + 1).padStart(2, '0')}`;
   
-  // LÓGICA DO MELHOR DIA DE COMPRA (BPD):
-  // O BPD é o primeiro dia do ciclo da FATURA FUTURA.
-  // Se a compra é feita NO DIA ou APÓS o BPD, ela vai para a COMPETÊNCIA do MÊS SEGUINTE.
+  // Dia de Fechamento (CLOSE) é o dia anterior ao Melhor Dia de Compra (BPD).
+  // Usamos bestPurchaseDay - 1. Se BPD for 1, fechamento é o último dia do mês anterior.
+  const diaFechamento = bestPurchaseDay - 1;
   
-  if (dia >= bestPurchaseDay) {
-      // Compra feita NO DIA ou APÓS o BPD.
-      // Entra no ciclo cuja COMPETÊNCIA é o mês seguinte.
-      mes += 1;
-  }
+  let offsetMeses;
 
-  // Ajuste de ano (virada de Dezembro para Janeiro)
-  if (mes > 11) {
-    ano += Math.floor(mes / 12);
-    mes = mes % 12;
+  // LÓGICA REFINADA BASEADA NA RELAÇÃO ENTRE FECHAMENTO E VENCIMENTO
+  // A lógica só é válida se diaVencimento e diaFechamento (ou BPD) forem tratados
+  // como dias dentro do mesmo MÊS-CALENDÁRIO DA COMPRA.
+
+  // Tipo B (Ex: Nubank, XP): Fechamento (5) ANTES do Vencimento (12). Ciclo dentro do mês.
+  const isCycleWithinMonth = diaFechamento < diaVencimento && diaFechamento >= 1;
+
+  // Tipo A (Ex: BB): Fechamento (26) APÓS o Vencimento (10). Ciclo cruza o mês.
+  // Também inclui o caso de BPD=1, onde diaFechamento é 0 (ou seja, no mês anterior), 
+  // forçando o caso Type A, já que a compra sempre cai após o fechamento do ciclo atual.
+  
+  if (isCycleWithinMonth) { // Type B: CLOSE < DUE (Nubank, XP)
+      if (diaCompra <= diaFechamento) {
+          // Compra ANTES/NO FECHAMENTO. Compete Month = Mês de Compra - 1.
+          // Ex: Compra 03/11 (<= 5). Compete: Outubro. Vence: Novembro.
+          offsetMeses = -1;
+      } else {
+          // Compra APÓS FECHAMENTO. Compete Month = Mês de Compra.
+          // Ex: Compra 28/11 (> 5). Compete: Novembro. Vence: Dezembro.
+          offsetMeses = 0;
+      }
+  } else { // Type A: CLOSE >= DUE (BB) ou BPD = 1
+      if (diaCompra <= diaFechamento) {
+          // Compra ANTES/NO FECHAMENTO. Compete Month = Mês de Compra.
+          // Ex: Compra 21/11 (<= 26). Compete: Novembro. Vence: Dezembro.
+          offsetMeses = 0;
+      } else {
+          // Compra APÓS FECHAMENTO. Compete Month = Mês de Compra + 1.
+          // Ex: Compra 28/11 (> 26). Compete: Dezembro. Vence: Janeiro.
+          offsetMeses = 1;
+      }
   }
   
-  // O valor retornado é o MÊS DE COMPETÊNCIA (Due Month = Competência + 1)
-  return `${ano}-${String(mes + 1).padStart(2, "0")}`;
+  // O valor retornado é o MÊS DE COMPETÊNCIA ("YYYY-MM")
+  return addMeses(mesCompraStr, offsetMeses);
 }
 
 export function addMeses(mesAno: string, quantidade: number): string {
@@ -93,7 +124,7 @@ export function addMeses(mesAno: string, quantidade: number): string {
   ano += Math.floor(mes / 12);
   mes = mes % 12;
   
-  // Corrige bug de módulo negativo em JS se houver (não deve ocorrer aqui pois qtd > 0)
+  // Corrige bug de módulo negativo em JS se houver
   if (mes < 0) {
       mes += 12;
       ano -= 1;

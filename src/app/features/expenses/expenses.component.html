@@ -2,7 +2,6 @@
 
     <h2 class="mb-3">Contas & Faturas</h2>
 
-    <!-- FORMULÁRIO DE CADASTRO RÁPIDO -->
     <div class="card mb-4 border-secondary">
         <div class="card-body bg-light">
             <h5 class="mb-3">Lançar Conta Avulsa (Pix, Boleto, Débito)</h5>
@@ -28,7 +27,7 @@
                     <select class="form-select" formControlName="type">
                         <option *ngFor="let t of expenseTypes" [value]="t.value">{{ t.label }}</option>
                     </select>
-                </div>
+                    </div>
 
                 <div class="col-md-1">
                     <button class="btn btn-success w-100" [disabled]="expenseForm.invalid">+</button>
@@ -40,18 +39,15 @@
         </div>
     </div>
 
-    <!-- TABELA DE CONTAS -->
     <div class="card shadow-sm">
         <div class="card-body p-0">
             
-            <!-- BARRA DE FILTROS -->
             <div class="p-3 bg-white border-bottom">
                 <div class="row g-2 align-items-center">
                     <div class="col-md-3">
                         <label class="form-label small mb-1 fw-bold">Mês de Vencimento</label>
                         <select class="form-select form-select-sm" [(ngModel)]="filterMonth">
                             <option value="">Todos os meses</option>
-                            <!-- AQUI: Usando o formatMonthLabel -->
                             <option *ngFor="let m of mesesDisponiveis" [value]="m">
                                 {{ formatMonthLabel(m) }}
                             </option>
@@ -71,6 +67,7 @@
                             <option value="DATE_ASC">📅 Vencimento (Antigo -> Novo)</option>
                             <option value="DATE_DESC">📅 Vencimento (Novo -> Antigo)</option>
                             <option value="VAL_DESC">💲 Valor (Maior -> Menor)</option>
+                            <option value="VAL_ASC">💲 Valor (Menor -> Maior)</option>
                         </select>
                     </div>
                     <div class="col-md-3 text-end align-self-end">
@@ -87,17 +84,20 @@
                             <th>Descrição</th>
                             <th>Categoria</th>
                             <th class="text-end">Valor</th>
-                            <th class="text-end" style="width: 80px;">Ações</th>
+                            <th class="text-center" style="width: 100px;">Ações</th> 
                         </tr>
                     </thead>
                     <tbody>
-                        <tr *ngFor="let item of filteredItems">
-                            <td>{{ item.date | date:'dd/MM/yyyy' }}</td>
+                        <tr *ngFor="let item of filteredItems" [class.table-success]="item.isPaid">
+                            <td>
+                                <span *ngIf="item.isPaid" class="text-success me-2" title="Conta Paga">✔</span>
+                                {{ item.date | date:'dd/MM/yyyy' }}
+                            </td>
                             
                             <td class="fw-bold text-truncate" style="max-width: 200px;" [title]="item.description">
-                                {{ item.description }}
+                                <span [class.text-muted]="item.isPaid">{{ item.description }}</span>
                                 <span *ngIf="item.type === 'FATURA'" class="badge bg-warning text-dark ms-2">Fatura</span>
-                            </td>
+                                </td>
 
                             <td>
                                 <span class="badge rounded-pill fw-normal" 
@@ -110,18 +110,25 @@
                                 </span>
                             </td>
 
-                            <!-- AQUI: O currency pipe agora usará o padrão PT-BR -->
-                            <td class="text-end font-monospace fs-6">
+                            <td class="text-end font-monospace fs-6" [class.text-muted]="item.isPaid">
                                 {{ item.amount | currency:'BRL' }}
                             </td>
 
-                            <td class="text-end">
+                            <td class="text-center">
+                                <button class="btn btn-sm btn-link p-0 me-2" (click)="markAsPaid(item)" 
+                                        [title]="item.isPaid ? 'Marcar como Não Pago' : 'Marcar como Pago'">
+                                    <span [class.text-secondary]="!item.isPaid" [class.text-success]="item.isPaid" class="fs-6">
+                                        {{ item.isPaid ? '❌' : '✅' }}
+                                    </span>
+                                </button>
+                                
+                                <button *ngIf="item.type === 'FATURA'" class="btn btn-sm btn-link text-primary p-0 me-2" (click)="openFaturaDetails(item)" title="Detalhes da Fatura">
+                                    <span class="fs-6">🔍</span>
+                                </button>
+
                                 <button *ngIf="item.type === 'CONTA'" class="btn btn-sm btn-link text-danger p-0" (click)="deletar(item)" title="Excluir">
                                     🗑️
                                 </button>
-                                <span *ngIf="item.type === 'FATURA'" class="text-muted small" title="Gerencie na aba Cartões">
-                                    🔒
-                                </span>
                             </td>
                         </tr>
                         
@@ -145,3 +152,52 @@
     </div>
 
 </div>
+
+<div class="modal fade show d-block" *ngIf="showDetailsModal" tabindex="-1" style="background-color: rgba(0, 0, 0, 0.5);">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Detalhes da Fatura {{ faturaDetalhesCardName }} - {{ formatMonthLabel(filterMonth) }}</h5>
+                <button type="button" class="btn-close" (click)="closeFaturaDetails()"></button>
+            </div>
+            <div class="modal-body">
+                <h6 class="fw-bold text-danger">TOTAL DE PARCELAS NESTE MÊS: {{ faturaDetalhesTotal | currency:'BRL' }}</h6>
+                <p class="small text-muted">Esta é a soma das parcelas (ou compras à vista) que vencem no mês filtrado.</p>
+                
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Compra (Data)</th>
+                                <th>Parcela</th>
+                                <th class="text-end">Valor Parcela</th>
+                                <th class="text-end">Valor Total</th>
+                                <th class="text-end">Falta Pagar</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr *ngFor="let detalhe of faturaDetalhes">
+                                <td>
+                                    <strong>{{ detalhe.description }}</strong>
+                                    <span *ngIf="detalhe.personName" class="badge bg-info text-dark ms-2">{{ detalhe.personName }}</span>
+                                    <div class="small text-muted">Data: {{ detalhe.dateCompra | date:'dd/MM/yyyy' }}</div>
+                                </td>
+                                <td>
+                                    <span class="badge bg-secondary">{{ detalhe.parcelaAtual }}/{{ detalhe.parcelasTotal }}</span>
+                                </td>
+                                <td class="text-end fw-bold">{{ detalhe.valorParcela | currency:'BRL' }}</td>
+                                <td class="text-end">{{ detalhe.amountTotal | currency:'BRL' }}</td>
+                                <td class="text-end text-primary fw-bold">{{ detalhe.saldoRestante | currency:'BRL' }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" (click)="closeFaturaDetails()">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div *ngIf="showDetailsModal" class="modal-backdrop fade show"></div>
