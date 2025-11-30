@@ -40,7 +40,7 @@ export class CardsComponent implements OnInit {
 
   cardForm = this.fb.group({
     name: ['', Validators.required],
-    closingDay: [null as number | null, [Validators.required, Validators.min(1), Validators.max(31)]],
+    bestPurchaseDay: [null as number | null, [Validators.required, Validators.min(1), Validators.max(31)]],
     dueDay: [null as number | null, [Validators.required, Validators.min(1), Validators.max(31)]],
     color: ['#0d6efd']
   });
@@ -170,7 +170,7 @@ export class CardsComponent implements OnInit {
     
     const newCard: Omit<CreditCard, 'id'> = {
       name: val.name!,
-      closingDay: val.closingDay!,
+      bestPurchaseDay: val.bestPurchaseDay!,
       dueDay: val.dueDay!,
       color: val.color || '#0d6efd'
     };

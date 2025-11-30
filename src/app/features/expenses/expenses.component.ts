@@ -109,17 +109,18 @@ export class ExpensesComponent implements OnInit {
     let maxMes = '0000-00';
     const hoje = new Date().toISOString().substring(0, 7);
     
+    // O range de meses para o filtro é baseado no MÊS DE VENCIMENTO.
     if (hoje < minMes) minMes = hoje;
     if (hoje > maxMes) maxMes = hoje;
 
-    // 1. Contas
+    // 1. Contas (Data de Vencimento = Data de Referência/Competência)
     const contas = this.snapshot.expenses.filter(e => e.type !== 'CARTAO');
     for (const c of contas) {
         const mesRef = c.date.substring(0, 7); 
         this.allItems.push({
             id: c.id,
             type: 'CONTA',
-            date: c.date,
+            date: c.date, // Data de Vencimento é a data da conta
             description: c.description,
             categoryLabel: c.type === 'PIX_DEBITO' ? 'Pix/Débito' : 'Financiamento',
             amount: c.amount
@@ -128,34 +129,50 @@ export class ExpensesComponent implements OnInit {
         if (mesRef > maxMes) maxMes = mesRef;
     }
 
-    // 2. Faturas
+    // 2. Faturas (Data de Vencimento)
+    // CORREÇÃO 1: Devemos filtrar APENAS as compras de CARTÃO.
     const comprasCartao = this.snapshot.expenses.filter(e => e.type === 'CARTAO');
+    
+    // O mapa deve agrupar pelo MÊS DE VENCIMENTO (Due Month), pois a filtragem da lista final é por VENCIMENTO.
     const faturasMap = new Map<string, number>();
 
     for (const compra of comprasCartao) {
         const card = this.snapshot.cards.find(c => c.id === compra.cardId);
-        const diaFechamento = card ? card.closingDay : 1;
-        const parcelas = gerarParcelasDeUmaDespesa(compra, diaFechamento);
+        const bestPurchaseDay = card ? card.bestPurchaseDay : 1;
+        const parcelas = gerarParcelasDeUmaDespesa(compra, bestPurchaseDay);
 
         for (const p of parcelas) {
-            const chave = `${compra.cardId || 'unknown'}|${p.mesReferencia}`;
+            // mesRef é o mês de competência (Referência)
+            const mesRef = p.mesReferencia; 
+            
+            // CORREÇÃO 2: O mês de vencimento (Due Month) é o MÊS DE REFERÊNCIA + 1 MÊS
+            const dueMonth = addMeses(mesRef, 1);
+            
+            // A chave de agrupamento deve ser baseada no MÊS DE VENCIMENTO e no Card ID
+            const chave = `${compra.cardId || 'unknown'}|${dueMonth}`; 
+            
             const atual = faturasMap.get(chave) || 0;
             faturasMap.set(chave, atual + p.valor);
             
-            if (p.mesReferencia < minMes) minMes = p.mesReferencia;
-            if (p.mesReferencia > maxMes) maxMes = p.mesReferencia;
+            // Usa o mês de vencimento para determinar o range dos filtros
+            if (dueMonth > maxMes) maxMes = dueMonth;
+            if (dueMonth < minMes) minMes = dueMonth;
         }
     }
 
+    // Gerando a lista final de Faturas a partir do mapa agrupado por Mês de Vencimento
     for (const [chave, valor] of faturasMap) {
-        const [cardId, mesRef] = chave.split('|');
+        const [cardId, dueMonth] = chave.split('|'); // dueMonth é o Mês de Vencimento
         const card = this.snapshot.cards.find(c => c.id === cardId);
+        
+        // Dia de Vencimento
         const diaVenc = card ? String(card.dueDay).padStart(2, '0') : '10';
-        const dataVencimento = `${mesRef}-${diaVenc}`;
+        // Data de Vencimento
+        const dataVencimento = `${dueMonth}-${diaVenc}`;
 
         this.allItems.push({
             type: 'FATURA',
-            date: dataVencimento,
+            date: dataVencimento, // Data de Vencimento (usada para filtragem)
             description: `Fatura ${card ? card.name : 'Cartão'}`,
             categoryLabel: 'Fatura Cartão',
             amount: valor,
@@ -163,12 +180,14 @@ export class ExpensesComponent implements OnInit {
         });
     }
 
+    // O range de meses disponíveis agora considera o mês de Vencimento das faturas/contas
     this.mesesDisponiveis = gerarRangeMeses(minMes, maxMes);
   }
 
   get filteredItems(): ExpenseViewItem[] {
       let list = [...this.allItems];
 
+      // filterMonth agora representa o MÊS DE VENCIMENTO
       if (this.filterMonth) {
           list = list.filter(item => item.date.startsWith(this.filterMonth));
       }

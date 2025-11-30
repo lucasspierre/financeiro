@@ -10,12 +10,12 @@ export function gerarParcelasDeTodos(
   for (const e of expenses) {
     if (e.type === 'CARTAO') {
         const card = cards.find(c => c.id === e.cardId);
-        // Aqui assumimos que 'closingDay' no cadastro do cartão
-        // representa o "MELHOR DIA DE COMPRA" (o dia que a fatura vira).
-        const bestDay = card ? card.closingDay : 1;
+        // Usamos o bestPurchaseDay e dueDay configurados no cartão.
+        const bestPurchaseDay = card ? card.bestPurchaseDay : 1;
         const dueDay = card ? card.dueDay : 10;
         
-        const lista = gerarParcelasDeUmaDespesa(e, bestDay, dueDay);
+        // Passa o dia de referência para o cálculo da primeira parcela
+        const lista = gerarParcelasDeUmaDespesa(e, bestPurchaseDay, dueDay);
         parcelas.push(...lista);
     }
   }
@@ -24,7 +24,7 @@ export function gerarParcelasDeTodos(
 
 export function gerarParcelasDeUmaDespesa(
   expense: Expense,
-  melhorDiaCompra: number, // Antigo diaFechamento
+  bestPurchaseDay: number, // Dia limite para a compra entrar na próxima fatura
   diaVencimento: number = 10 // Padrão se não informado
 ): ParcelaReal[] {
   const parcelas: ParcelaReal[] = [];
@@ -32,8 +32,8 @@ export function gerarParcelasDeUmaDespesa(
   // Força meio-dia para evitar problemas de fuso horário
   const dataCompra = new Date(expense.date + 'T12:00:00');
   
-  // Calcula o mês da primeira parcela
-  const mesInicial = getMesReferenciaInicial(dataCompra, melhorDiaCompra, diaVencimento);
+  // Calcula o mês da primeira parcela (Competência)
+  const mesInicial = getMesReferenciaInicial(dataCompra, bestPurchaseDay, diaVencimento);
 
   const qtd = expense.totalInstallments && expense.totalInstallments > 0 ? expense.totalInstallments : 1;
   const valorParcela = expense.installmentValue ? expense.installmentValue : Math.round((expense.amount / qtd) * 100) / 100;
@@ -59,20 +59,20 @@ export function gerarParcelasDeUmaDespesa(
   return parcelas;
 }
 
-export function getMesReferenciaInicial(dataCompra: Date, melhorDiaCompra: number, diaVencimento: number): string {
+export function getMesReferenciaInicial(dataCompra: Date, bestPurchaseDay: number, diaVencimento: number): string {
   let ano = dataCompra.getFullYear();
-  let mes = dataCompra.getMonth(); // 0-11
-  const dia = dataCompra.getDate();
-
-  // LÓGICA DO MELHOR DIA DE COMPRA:
-  // Se comprei no dia 5 e o melhor dia é 5 -> Fatura do próximo mês.
-  // Se comprei no dia 4 e o melhor dia é 5 -> Fatura deste mês.
+  let mes = dataCompra.getMonth(); // 0-11 (Mês da Compra)
+  const dia = dataCompra.getDate(); // Dia da Compra
   
-  if (dia >= melhorDiaCompra) {
-      // Compra entrou na fatura nova -> Pula para o próximo mês
-      mes += 1; 
+  // LÓGICA DO MELHOR DIA DE COMPRA (BPD):
+  // O BPD é o primeiro dia do ciclo da FATURA FUTURA.
+  // Se a compra é feita NO DIA ou APÓS o BPD, ela vai para a COMPETÊNCIA do MÊS SEGUINTE.
+  
+  if (dia >= bestPurchaseDay) {
+      // Compra feita NO DIA ou APÓS o BPD.
+      // Entra no ciclo cuja COMPETÊNCIA é o mês seguinte.
+      mes += 1;
   }
-  // Se dia < melhorDiaCompra, mantém no mês atual (mes += 0)
 
   // Ajuste de ano (virada de Dezembro para Janeiro)
   if (mes > 11) {
@@ -80,6 +80,7 @@ export function getMesReferenciaInicial(dataCompra: Date, melhorDiaCompra: numbe
     mes = mes % 12;
   }
   
+  // O valor retornado é o MÊS DE COMPETÊNCIA (Due Month = Competência + 1)
   return `${ano}-${String(mes + 1).padStart(2, "0")}`;
 }
 

@@ -7,7 +7,6 @@
     </button>
   </div>
 
-  <!-- FORMULÁRIO DE CARTÃO -->
   <div *ngIf="showCardForm" class="card mb-4 border-primary">
     <div class="card-body">
       <h5>{{ editingCard ? 'Editar' : 'Cadastrar' }} Cartão</h5>
@@ -17,8 +16,8 @@
           <input class="form-control" formControlName="name">
         </div>
         <div class="col-md-2">
-          <label class="form-label">Dia Fechamento</label>
-          <input type="number" class="form-control" formControlName="closingDay">
+          <label class="form-label">Melhor Dia de Compra</label>
+          <input type="number" class="form-control" formControlName="bestPurchaseDay">
         </div>
         <div class="col-md-2">
           <label class="form-label">Dia Vencimento</label>
@@ -35,7 +34,6 @@
     </div>
   </div>
 
-  <!-- ABAS DE CARTÕES -->
   <ul class="nav nav-tabs mb-4">
     <li class="nav-item" *ngFor="let c of cards">
       <a 
@@ -52,10 +50,8 @@
     Você ainda não cadastrou nenhum cartão.
   </div>
 
-  <!-- ÁREA DO CARTÃO SELECIONADO -->
   <div *ngIf="selectedCardId && !loading">
     
-    <!-- LANÇAR COMPRA -->
     <div class="card mb-4 bg-light">
       <div class="card-body">
         <div class="d-flex justify-content-between align-items-center mb-3">
@@ -108,7 +104,6 @@
       </div>
     </div>
 
-    <!-- HISTÓRICO DE COMPRAS -->
     <div class="card">
       <div class="card-body">
         <div class="d-flex justify-content-between align-items-center mb-3">
@@ -120,13 +115,11 @@
             </button>
         </div>
 
-        <!-- BARRA DE FILTROS -->
         <div class="row g-2 mb-3 bg-light p-2 rounded align-items-end">
             <div class="col-md-3">
                 <label class="form-label small mb-1 fw-bold">Filtrar Mês</label>
                 <select class="form-select form-select-sm" [(ngModel)]="filterMonth">
                     <option value="">Todos os meses</option>
-                    <!-- AQUI: Usando formatMonthLabel -->
                     <option *ngFor="let m of availableMonths" [value]="m">
                         {{ formatMonthLabel(m) }}
                     </option>

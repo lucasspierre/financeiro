@@ -2,8 +2,7 @@
 export interface CreditCard {
   id: string;
   name: string;       // Ex: "Nubank", "Inter"
-  // holder: string;  <-- REMOVIDO
-  closingDay: number; // Dia do fechamento da fatura
+  bestPurchaseDay: number; // Dia do melhor dia de compra (data limite para entrar na fatura seguinte)
   dueDay: number;     // Dia do vencimento
   color?: string;     // Para diferenciar na UI (opcional)
 }
@@ -31,7 +30,7 @@ export interface Expense {
   notes?: string;             // Observação
 }
 
-// ... IncomeType e Income permanecem iguais ...
+// TIPOS DE ENTRADA
 export type IncomeType =
   | 'SALARIO'
   | 'RECORRENTE'

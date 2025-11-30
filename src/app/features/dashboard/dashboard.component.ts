@@ -167,31 +167,38 @@ export class DashboardComponent implements OnInit {
     // 1. Entradas do Mês Selecionado
     const incomesMes = this.snapshot.incomes.filter((i) => {
       const d = new Date(i.date + 'T12:00:00');
-      return d.getFullYear() === ano && d.getMonth() + 1 === mes;
+      // Filtra pela data da entrada
+      return d.getFullYear() === ano && d.getMonth() + 1 === mes; 
     });
     this.monthIncomeSum = incomesMes.reduce((s, i) => s + i.amount, 0);
 
     // 2. Despesas do Mês Selecionado (Cartão + Contas)
-    // A) Parcelas de Cartão que caem neste mês
+    
+    // A) Faturas de Cartão que VENCEM neste mês (Mês de Vencimento = filterMonth)
     const despesasCartao = this.snapshot.expenses.filter(e => e.type === 'CARTAO');
     let somaParcelas = 0;
     
     for (const compra of despesasCartao) {
         const card = this.snapshot.cards.find(c => c.id === compra.cardId);
-        const diaFechamento = card ? card.closingDay : 1;
+        const bestPurchaseDay = card ? card.bestPurchaseDay : 1;
         const diaVencimento = card ? card.dueDay : 10;
-        const parcelas = gerarParcelasDeUmaDespesa(compra, diaFechamento, diaVencimento);
+        const parcelas = gerarParcelasDeUmaDespesa(compra, bestPurchaseDay, diaVencimento);
         
-        const p = parcelas.find(p => p.mesReferencia === this.filterMonth);
+        // CORREÇÃO: Busca a parcela cujo DUE MONTH (Vencimento) é o mês filtrado.
+        const p = parcelas.find(p => {
+            const dueMonth = addMeses(p.mesReferencia, 1);
+            return dueMonth === this.filterMonth;
+        });
+
         if (p) somaParcelas += p.valor;
     }
     this.totalCartaoMes = somaParcelas;
 
-    // B) Contas Avulsas deste mês
+    // B) Contas Avulsas que VENCEM/Ocorrem neste mês
     const despesasNaoCartao = this.snapshot.expenses.filter((e) => {
       const d = new Date(e.date + 'T12:00:00');
+      // Filtra pela data da conta (vencimento/ocorrência)
       const mesRef = d.getFullYear() === ano && d.getMonth() + 1 === mes;
-      // Considera tudo que NÃO é cartão como conta avulsa
       const isConta = e.type !== 'CARTAO';
       return mesRef && isConta;
     });
@@ -208,19 +215,18 @@ export class DashboardComponent implements OnInit {
     const despesasTerceiros = despesasCartao.filter(e => !!e.personName);
     this.terceirosTotalCompras = despesasTerceiros.reduce((s, e) => s + e.amount, 0);
     
-    // Parcelas terceiros (somente para exibição no card lateral, pode manter a logica geral ou filtrar pelo mes)
-    // Aqui mantive a lógica geral "a receber" para o card lateral não ficar zerado se não tiver nada no mês
-    const todasParcelasRaw = gerarParcelasDeTodos(despesasCartao, this.snapshot.cards); // genérico
+    // Todas as parcelas geradas
+    const todasParcelasRaw = gerarParcelasDeTodos(despesasCartao, this.snapshot.cards); 
     const parcelasTerceiros = todasParcelasRaw.filter(p => p.isThirdParty);
     
-    // Ajuste: Mostra o que tem pra receber NESTE mês selecionado
+    // CORREÇÃO: Mostra o que tem pra receber NESTE mês (VENCIMENTO)
     this.terceirosParcelasMes = parcelasTerceiros
-      .filter((p) => p.mesReferencia === this.filterMonth)
+      .filter((p) => addMeses(p.mesReferencia, 1) === this.filterMonth) // Vencimento = filterMonth
       .reduce((s, p) => s + p.valor, 0);
 
-    // Ajuste: Mostra o que tem pra receber DEPOIS deste mês
+    // CORREÇÃO: Mostra o que tem pra receber DEPOIS deste mês (VENCIMENTO > filterMonth)
     this.terceirosParcelasFuturas = parcelasTerceiros
-      .filter((p) => p.mesReferencia > this.filterMonth)
+      .filter((p) => addMeses(p.mesReferencia, 1) > this.filterMonth) // Vencimento > filterMonth
       .reduce((s, p) => s + p.valor, 0);
   }
 
@@ -232,7 +238,7 @@ export class DashboardComponent implements OnInit {
       const contas = this.snapshot.expenses.filter(e => e.type !== 'CARTAO');
       for(const c of contas) {
           const d = new Date(c.date + 'T12:00:00');
-          // Verifica se cai no mês selecionado
+          // Verifica se cai no mês selecionado (Vencimento/Ocorrência)
           if (d.getFullYear() === ano && d.getMonth() + 1 === mes) {
               this.contasDoMes.push({
                   description: c.description,
@@ -246,25 +252,32 @@ export class DashboardComponent implements OnInit {
 
       // 2. Adiciona Faturas de Cartão (Agrupadas por Cartão)
       const comprasCartao = this.snapshot.expenses.filter(e => e.type === 'CARTAO');
-      const faturasMap = new Map<string, number>(); // CardId -> Valor
+      const faturasMap = new Map<string, number>(); // CardId -> Valor (totalizado no mês de vencimento filtrado)
 
       for(const compra of comprasCartao) {
           const card = this.snapshot.cards.find(c => c.id === compra.cardId);
-          const diaFechamento = card ? card.closingDay : 1;
+          const bestPurchaseDay = card ? card.bestPurchaseDay : 1;
           const diaVencimento = card ? card.dueDay : 10;
-          const parcelas = gerarParcelasDeUmaDespesa(compra, diaFechamento, diaVencimento);
+          const parcelas = gerarParcelasDeUmaDespesa(compra, bestPurchaseDay, diaVencimento);
           
-          const p = parcelas.find(p => p.mesReferencia === this.filterMonth);
-          if (p) {
-              const cardId = compra.cardId || 'unknown';
-              faturasMap.set(cardId, (faturasMap.get(cardId) || 0) + p.valor);
+          for (const p of parcelas) {
+              const mesRef = p.mesReferencia;
+              // CORREÇÃO: O mês de vencimento é 1 mês após o mês de referência
+              const dueMonth = addMeses(mesRef, 1); 
+              
+              if (dueMonth === this.filterMonth) { // Filtra apenas o que VENCE no mês
+                  const cardId = compra.cardId || 'unknown';
+                  // Agrupa pelo CardId para somar o total da fatura que vence neste mês
+                  faturasMap.set(cardId, (faturasMap.get(cardId) || 0) + p.valor);
+              }
           }
       }
 
       for (const [cardId, valor] of faturasMap) {
           const card = this.snapshot.cards.find(c => c.id === cardId);
-          // Calcula vencimento estimado: YYYY-MM-DiaVencimento
+          // Calcula vencimento: YYYY-MM-DiaVencimento
           const diaVenc = card ? String(card.dueDay).padStart(2, '0') : '10';
+          // CORREÇÃO: O mês de vencimento é o this.filterMonth
           const dataVenc = `${this.filterMonth}-${diaVenc}`;
 
           this.contasDoMes.push({
@@ -288,10 +301,15 @@ export class DashboardComponent implements OnInit {
 
       for (const compra of despesasCartao) {
           const card = this.snapshot.cards.find(c => c.id === compra.cardId);
-          const diaFechamento = card ? card.closingDay : 1;
+          const bestPurchaseDay = card ? card.bestPurchaseDay : 1; 
           const diaVencimento = card ? card.dueDay : 10;
-          const parcelas = gerarParcelasDeUmaDespesa(compra, diaFechamento, diaVencimento);
-          const p = parcelas.find(p => p.mesReferencia === this.filterMonth);
+          const parcelas = gerarParcelasDeUmaDespesa(compra, bestPurchaseDay, diaVencimento);
+          
+          // CORREÇÃO: Busca a parcela cujo DUE MONTH (Vencimento) é o mês filtrado.
+          const p = parcelas.find(p => {
+              const dueMonth = addMeses(p.mesReferencia, 1);
+              return dueMonth === this.filterMonth;
+          });
           
           if (p) {
               if (compra.personName) {
@@ -317,15 +335,18 @@ export class DashboardComponent implements OnInit {
     // Entradas (já calculadas em montarProjecaoFutura)
     const dataEntradas = mesesGrafico.map(m => this.totaisMesFuturo[m] || 0);
     
-    // Saídas (Parcelas Cartão conhecidas + Contas Avulsas do histórico recente?)
-    // Simplificação: Considera apenas as parcelas de cartão já lançadas.
+    // Saídas (Parcelas Cartão conhecidas)
     const despesasCartao = this.snapshot.expenses.filter(e => e.type === 'CARTAO');
-    const todasParcelas = gerarParcelasDeTodos(despesasCartao, this.snapshot.cards); // aqui usa um fechamento genérico ou teria que iterar um a um
-    // Melhor seria iterar um a um para precisão, mas para gráfico de tendência ok:
+    const todasParcelas = gerarParcelasDeTodos(despesasCartao, this.snapshot.cards);
     
+    // A lista de Saídas no gráfico representa o TOTAL A VENCER no mês
     const dataSaidas = mesesGrafico.map(mes => {
         return todasParcelas
-            .filter(p => p.mesReferencia === mes)
+            .filter(p => {
+                 // CORREÇÃO: Filtra pelo MÊS DE VENCIMENTO (Competência + 1 mês)
+                 const dueMonth = addMeses(p.mesReferencia, 1); 
+                 return dueMonth === mes; 
+            })
             .reduce((acc, p) => acc + p.valor, 0);
     });
 
@@ -351,15 +372,22 @@ export class DashboardComponent implements OnInit {
     // A) Reembolsos (Terceiros)
     const despesasCartao = this.snapshot.expenses.filter(e => e.type === 'CARTAO');
     const todasParcelas = gerarParcelasDeTodos(despesasCartao, this.snapshot.cards); // simplificado
-    const pFuturas = todasParcelas.filter(p => p.isThirdParty && this.mesesFuturosHeader.includes(p.mesReferencia));
+    // Aqui vamos iterar sobre o MÊS DE VENCIMENTO
     
+    const pFuturas = todasParcelas.filter(p => p.isThirdParty); // Todas as parcelas de terceiros
+
     for(const p of pFuturas) {
-        const key = `T-${p.personName}-${p.description}`;
-        if(!mapa.has(key)) mapa.set(key, { id: key, description: p.description, type: 'TERCEIROS', personName: p.personName, valoresPorMes: {} });
-        mapa.get(key)!.valoresPorMes[p.mesReferencia] = (mapa.get(key)!.valoresPorMes[p.mesReferencia] || 0) + p.valor;
+        const dueMonth = addMeses(p.mesReferencia, 1); // Mês de Vencimento
+        
+        if (this.mesesFuturosHeader.includes(dueMonth)) { // Verifica se o vencimento está no range do cabeçalho
+            const key = `T-${p.personName}-${p.description}`;
+            if(!mapa.has(key)) mapa.set(key, { id: key, description: p.description, type: 'TERCEIROS', personName: p.personName, valoresPorMes: {} });
+            // Usa dueMonth (Vencimento) como chave do mês
+            mapa.get(key)!.valoresPorMes[dueMonth] = (mapa.get(key)!.valoresPorMes[dueMonth] || 0) + p.valor;
+        }
     }
 
-    // B) Recorrentes
+    // B) Recorrentes (Não precisam de alteração)
     const ultimas = new Map<string, any>();
     this.snapshot.incomes.filter(i => i.recurring).sort((a,b)=>a.date.localeCompare(b.date)).forEach(i => ultimas.set(i.description, i));
 
@@ -400,7 +428,11 @@ export class DashboardComponent implements OnInit {
     });
     
     const todas = gerarParcelasDeTodos(this.snapshot.expenses.filter(e=>e.type==='CARTAO'), this.snapshot.cards);
-    todas.forEach(p => { if(p.mesReferencia > max) max = p.mesReferencia; });
+    // Devemos usar o mês de VENCIMENTO das faturas para definir o range máximo
+    todas.forEach(p => { 
+        const dueMonth = addMeses(p.mesReferencia, 1);
+        if(dueMonth > max) max = dueMonth; 
+    });
     
     this.availableMonths = gerarRangeMeses(min, max);
   }
