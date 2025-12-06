@@ -36,11 +36,7 @@
 
   <ul class="nav nav-tabs mb-4">
     <li class="nav-item" *ngFor="let c of cards">
-      <a 
-        class="nav-link" 
-        [class.active]="selectedCardId === c.id"
-        style="cursor: pointer"
-        (click)="selectCard(c.id)">
+      <a class="nav-link" [class.active]="selectedCardId === c.id" style="cursor: pointer" (click)="selectCard(c.id)">
         <span [style.color]="c.color">●</span> {{ c.name }}
       </a>
     </li>
@@ -51,54 +47,64 @@
   </div>
 
   <div *ngIf="selectedCardId && !loading">
-    
+
     <div class="card mb-4 bg-light">
       <div class="card-body">
         <div class="d-flex justify-content-between align-items-center mb-3">
-            <h5 class="mb-0">
-                {{ editingPurchaseId ? '✏️ Editando Compra' : '🛒 Lançar Nova Compra' }}
-            </h5>
-            <button *ngIf="editingPurchaseId" class="btn btn-sm btn-secondary" (click)="cancelEditPurchase()">
-                Cancelar Edição
-            </button>
+          <h5 class="mb-0">
+            {{ editingPurchaseId ? '✏️ Editando Lançamento' : '🛒 Novo Lançamento' }}
+          </h5>
+          <button *ngIf="editingPurchaseId" class="btn btn-sm btn-secondary" (click)="cancelEditPurchase()">
+            Cancelar Edição
+          </button>
         </div>
 
-        <form [formGroup]="purchaseForm" (ngSubmit)="savePurchase()" class="row g-3">
-          
+        <form [formGroup]="purchaseForm" (ngSubmit)="savePurchase()" class="row g-3 align-items-end">
+
           <div class="col-md-4">
-            <label class="form-label">Descrição</label>
-            <input class="form-control" formControlName="description" placeholder="Ex: Supermercado">
+            <label class="form-label small mb-1">Descrição</label>
+            <input class="form-control" formControlName="description" placeholder="Ex: Supermercado ou Estorno">
           </div>
-          
+
           <div class="col-md-2">
-            <label class="form-label">Valor Total (R$)</label>
+            <label class="form-label small mb-1">Valor (R$)</label>
             <input type="number" step="0.01" class="form-control" formControlName="amount">
           </div>
 
+          <div class="col-md-2 d-flex align-items-center mb-2">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="isCreditCheck" formControlName="isCredit">
+              <label class="form-check-label fw-bold text-success" for="isCreditCheck">
+                É Crédito/Estorno?
+              </label>
+            </div>
+          </div>
+
           <div class="col-md-2">
-            <label class="form-label">Data da Compra</label>
+            <label class="form-label small mb-1">Data</label>
             <input type="date" class="form-control" formControlName="date">
           </div>
 
           <div class="col-md-2">
-            <label class="form-label">Parcelas</label>
+            <label class="form-label small mb-1">Parcelas</label>
             <input type="number" min="1" class="form-control" formControlName="totalInstallments">
           </div>
 
-          <div class="col-md-2">
-            <label class="form-label">Responsável (Opcional)</label>
-            <input type="text" class="form-control" formControlName="personName" placeholder="Deixar vazio se for meu">
+          <div class="col-md-3">
+            <label class="form-label small mb-1">Responsável</label>
+            <input type="text" class="form-control" formControlName="personName" placeholder="Opcional">
           </div>
 
-          <div class="col-md-12">
-            <label class="form-label">Observação</label>
+          <div class="col-md-7">
+            <label class="form-label small mb-1">Observação</label>
             <input type="text" class="form-control" formControlName="notes" placeholder="Detalhes adicionais...">
           </div>
 
-          <div class="col-12 text-end">
-             <button class="btn" [class.btn-warning]="editingPurchaseId" [class.btn-success]="!editingPurchaseId" [disabled]="purchaseForm.invalid">
-                 {{ editingPurchaseId ? 'Atualizar Compra' : 'Lançar Compra' }}
-             </button>
+          <div class="col-md-2 text-end">
+            <button class="btn w-100" [class.btn-warning]="editingPurchaseId" [class.btn-success]="!editingPurchaseId"
+              [disabled]="purchaseForm.invalid">
+              {{ editingPurchaseId ? 'Atualizar' : 'Lançar' }}
+            </button>
           </div>
         </form>
       </div>
@@ -107,101 +113,109 @@
     <div class="card">
       <div class="card-body">
         <div class="d-flex justify-content-between align-items-center mb-3">
-            <h5>Histórico de Compras</h5>
-            <button class="btn btn-sm btn-outline-secondary" 
-              *ngIf="getCardById(selectedCardId) as card"
-              (click)="editCard(card)">
-              ⚙️ Configurar este Cartão
-            </button>
+          <h5>Histórico</h5>
+          <button class="btn btn-sm btn-outline-secondary" *ngIf="getCardById(selectedCardId) as card"
+            (click)="editCard(card)">
+            ⚙️ Configurar este Cartão
+          </button>
         </div>
 
         <div class="row g-2 mb-3 bg-light p-2 rounded align-items-end">
-            <div class="col-md-3">
-                <label class="form-label small mb-1 fw-bold">Filtrar Mês</label>
-                <select class="form-select form-select-sm" [(ngModel)]="filterMonth">
-                    <option value="">Todos os meses</option>
-                    <option *ngFor="let m of availableMonths" [value]="m">
-                        {{ formatMonthLabel(m) }}
-                    </option>
-                </select>
-            </div>
-            <div class="col-md-3">
-                <label class="form-label small mb-1 fw-bold">Filtrar Responsável</label>
-                <select class="form-select form-select-sm" [(ngModel)]="filterPerson">
-                    <option value="">Todos</option>
-                    <option value="TITULAR">Somente Eu (Titular)</option>
-                    <option *ngFor="let p of availablePeople" [value]="p">{{ p }}</option>
-                </select>
-            </div>
-            <div class="col-md-3">
-                <label class="form-label small mb-1 fw-bold">Ordenação</label>
-                <select class="form-select form-select-sm" [(ngModel)]="sortOrder">
-                    <option value="DATE_DESC">📅 Mais Recente</option>
-                    <option value="DATE_ASC">📅 Mais Antigo</option>
-                    <option value="VAL_DESC">💲 Maior Valor</option>
-                    <option value="VAL_ASC">💲 Menor Valor</option>
-                </select>
-            </div>
-            <div class="col-md-3 text-end">
-                 <span class="badge bg-secondary">{{ filteredPurchases.length }} compras</span>
-            </div>
+          <div class="col-md-3">
+            <label class="form-label small mb-1 fw-bold">Filtrar Mês</label>
+            <select class="form-select form-select-sm" [(ngModel)]="filterMonth">
+              <option value="">Todos os meses</option>
+              <option *ngFor="let m of availableMonths" [value]="m">
+                {{ formatMonthLabel(m) }}
+              </option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label small mb-1 fw-bold">Filtrar Responsável</label>
+            <select class="form-select form-select-sm" [(ngModel)]="filterPerson">
+              <option value="">Todos</option>
+              <option value="TITULAR">Somente Eu (Titular)</option>
+              <option *ngFor="let p of availablePeople" [value]="p">{{ p }}</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label small mb-1 fw-bold">Ordenação</label>
+            <select class="form-select form-select-sm" [(ngModel)]="sortOrder">
+              <option value="DATE_DESC">📅 Mais Recente</option>
+              <option value="DATE_ASC">📅 Mais Antigo</option>
+              <option value="VAL_DESC">💲 Maior Valor</option>
+              <option value="VAL_ASC">💲 Menor Valor</option>
+            </select>
+          </div>
+          <div class="col-md-3 text-end">
+            <span class="badge bg-secondary">{{ filteredPurchases.length }} lançamentos</span>
+          </div>
         </div>
-        
+
         <div class="table-responsive">
-            <table class="table table-sm table-hover align-middle">
-              <thead class="table-light">
-                <tr>
-                  <th>Data</th>
-                  <th>Descrição</th>
-                  <th>Parc.</th>
-                  <th>Resp.</th>
-                  <th>Obs.</th>
-                  <th class="text-end">Total</th>
-                  <th class="text-end" style="min-width: 100px;">Ações</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr *ngFor="let p of filteredPurchases" [class.table-warning]="editingPurchaseId === p.id">
-                  <td>{{ p.date | date:'dd/MM/yy' }}</td>
-                  <td>{{ p.description }}</td>
-                  <td>{{ p.totalInstallments }}x</td>
-                  <td>
-                     <span *ngIf="p.personName" class="badge bg-info text-dark">{{ p.personName }}</span>
-                     <span *ngIf="!p.personName" class="badge bg-light text-dark border">Eu</span>
-                  </td>
-                  <td>
-                      <span *ngIf="p.notes" [title]="p.notes">📝</span>
-                  </td>
-                  <td class="text-end font-monospace">{{ p.amount | currency:'BRL' }}</td>
-                  <td class="text-end">
-                      <button class="btn btn-sm btn-link text-primary p-0 me-3" (click)="startEditPurchase(p)" title="Editar">
-                          ✏️
-                      </button>
-                      <button class="btn btn-sm btn-link text-danger p-0" (click)="deletePurchase(p.id)" title="Excluir">
-                          🗑️
-                      </button>
-                  </td>
-                </tr>
-                <tr *ngIf="filteredPurchases.length === 0">
-                    <td colspan="7" class="text-center text-muted py-4">
-                        Nenhuma compra encontrada com estes filtros.
-                    </td>
-                </tr>
-              </tbody>
-              
-              <tfoot *ngIf="filteredPurchases.length > 0">
-                  <tr class="fw-bold border-top table-light">
-                      <td colspan="5" class="text-end">TOTAL COMPRAS (Valor Cheio):</td>
-                      <td class="text-end text-primary font-monospace">{{ totalFilteredOriginal | currency:'BRL' }}</td>
-                      <td></td>
-                  </tr>
-                  <tr *ngIf="filterMonth" class="text-muted small">
-                      <td colspan="5" class="text-end">Soma das Parcelas (Aprox.):</td>
-                      <td class="text-end font-monospace">{{ totalFilteredParcela | currency:'BRL' }}</td>
-                      <td></td>
-                  </tr>
-              </tfoot>
-            </table>
+          <table class="table table-sm table-hover align-middle">
+            <thead class="table-light">
+              <tr>
+                <th>Data</th>
+                <th>Descrição</th>
+                <th>Parc.</th>
+                <th>Resp.</th>
+                <th>Obs.</th>
+                <th class="text-end">Total</th>
+                <th class="text-end" style="min-width: 100px;">Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let p of filteredPurchases" [class.table-warning]="editingPurchaseId === p.id">
+                <td>{{ p.date | date:'dd/MM/yy' }}</td>
+                <td>
+                  {{ p.description }}
+
+                  <span *ngIf="p.amount < 0" class="badge bg-success ms-1">Crédito</span>
+
+                  <span *ngFor="let c of p.classifications" class="badge border ms-1" [style.background-color]="c.color"
+                    style="color: #fff; text-shadow: 0 0 2px #000;">
+                    {{ c.name }}
+                  </span>
+                </td>
+                <td>{{ p.totalInstallments }}x</td>
+                <td>
+                  <span *ngIf="p.personName" class="badge bg-info text-dark">{{ p.personName }}</span>
+                  <span *ngIf="!p.personName" class="badge bg-light text-dark border">Eu</span>
+                </td>
+                <td>
+                  <span *ngIf="p.notes" [title]="p.notes">📝</span>
+                </td>
+
+                <td class="text-end font-monospace" [class.text-success]="p.amount < 0" [class.fw-bold]="p.amount < 0">
+                  {{ p.amount | currency:'BRL' }}
+                </td>
+
+                <td class="text-end">
+                  <button class="btn btn-sm btn-link text-primary p-0 me-3" (click)="startEditPurchase(p)"
+                    title="Editar">
+                    ✏️
+                  </button>
+                  <button class="btn btn-sm btn-link text-danger p-0" (click)="deletePurchase(p.id)" title="Excluir">
+                    🗑️
+                  </button>
+                </td>
+              </tr>
+              <tr *ngIf="filteredPurchases.length === 0">
+                <td colspan="7" class="text-center text-muted py-4">
+                  Nenhum lançamento encontrado.
+                </td>
+              </tr>
+            </tbody>
+
+            <tfoot *ngIf="filteredPurchases.length > 0">
+              <tr class="fw-bold border-top table-light">
+                <td colspan="5" class="text-end">TOTAL (Considerando Estornos):</td>
+                <td class="text-end text-primary font-monospace">{{ totalFilteredOriginal | currency:'BRL' }}</td>
+                <td></td>
+              </tr>
+            </tfoot>
+          </table>
         </div>
       </div>
     </div>

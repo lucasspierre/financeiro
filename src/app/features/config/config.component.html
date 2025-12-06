@@ -2,29 +2,137 @@
 
   <h2 class="mb-4">Configurações</h2>
 
-  <div *ngIf="loading">
-    Carregando configurações...
+  <div *ngIf="loading" class="text-center py-5">
+    <div class="spinner-border text-primary" role="status"></div>
   </div>
 
-  <form *ngIf="!loading" [formGroup]="configForm" (ngSubmit)="saveConfig()" class="row g-3">
+  <div *ngIf="!loading">
+    
+    <div class="row">
+      <div class="col-lg-4 mb-4">
+        
+        <div class="card shadow-sm border-primary">
+          <div class="card-header bg-primary-subtle text-primary-emphasis fw-bold">
+            Tetos de Gastos (Por Mês)
+          </div>
+          <div class="card-body">
+            <p class="small text-muted mb-3">
+              Defina o limite de gastos para meses específicos. Apenas categorias marcadas serão contabilizadas.
+            </p>
 
-    <div class="col-md-4">
-      <label class="form-label">Teto mensal (R$)</label>
-      <input class="form-control" formControlName="monthlyLimit" type="number" step="0.01">
+            <div class="input-group mb-3">
+              <input type="month" class="form-control" [(ngModel)]="newLimitMonth">
+              <input type="number" class="form-control" placeholder="Valor R$" [(ngModel)]="newLimitAmount">
+              <button class="btn btn-outline-primary" (click)="addMonthlyLimit()">+</button>
+            </div>
+
+            <ul class="list-group list-group-flush" style="max-height: 300px; overflow-y: auto;">
+              <li *ngFor="let item of monthlyLimits; let i = index" class="list-group-item d-flex justify-content-between align-items-center">
+                <span>
+                  <strong>{{ item.month }}</strong>
+                </span>
+                <div class="d-flex align-items-center">
+                  <span class="badge bg-primary rounded-pill me-3">{{ item.amount | currency:'BRL' }}</span>
+                  <button class="btn btn-sm btn-link text-danger p-0" (click)="removeMonthlyLimit(i)">🗑️</button>
+                </div>
+              </li>
+              <li *ngIf="monthlyLimits.length === 0" class="list-group-item text-center text-muted small">
+                Nenhum teto configurado.
+              </li>
+            </ul>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="col-lg-8 mb-4">
+        <div class="card h-100 border-info">
+          <div class="card-header bg-info-subtle text-info-emphasis fw-bold d-flex justify-content-between align-items-center">
+            <span>Categorias & Regras</span>
+            <small>Classificação Automática</small>
+          </div>
+          <div class="card-body">
+            
+            <div class="row g-2 mb-4 align-items-end border-bottom pb-3 bg-light p-2 rounded">
+              <div class="col-md-4">
+                <label class="small text-muted fw-bold">Nome da Categoria</label>
+                <input type="text" class="form-control form-control-sm" placeholder="Ex: Alimentação" [(ngModel)]="newCatName">
+              </div>
+              <div class="col-md-2">
+                <label class="small text-muted fw-bold">Cor</label>
+                <input type="color" class="form-control form-control-color form-control-sm w-100" [(ngModel)]="newCatColor">
+              </div>
+              <div class="col-md-3">
+                 <div class="form-check pt-4">
+                    <input class="form-check-input" type="checkbox" id="newCatInclude" [(ngModel)]="newCatIncluded">
+                    <label class="form-check-label small" for="newCatInclude">
+                      Conta no Teto?
+                    </label>
+                 </div>
+              </div>
+              <div class="col-md-3">
+                <button class="btn btn-sm btn-success w-100" (click)="addCategory()">+ Adicionar</button>
+              </div>
+            </div>
+
+            <div class="row g-3">
+              <div class="col-md-6" *ngFor="let rule of rules; let i = index">
+                <div class="card h-100 shadow-sm" [style.border-left]="'5px solid ' + rule.color">
+                  <div class="card-body py-2">
+                    
+                    <div class="d-flex justify-content-between align-items-start mb-2 border-bottom pb-2">
+                      <div class="w-100 me-2">
+                        
+                        <div class="input-group input-group-sm mb-2">
+                           <input type="color" class="form-control form-control-color" style="max-width: 40px; padding: 0.2rem;" 
+                                  [(ngModel)]="rule.color" title="Alterar Cor">
+                           <input type="text" class="form-control fw-bold" 
+                                  [(ngModel)]="rule.name" [style.color]="rule.color">
+                        </div>
+
+                        <div class="form-check form-switch">
+                          <input class="form-check-input" type="checkbox" [id]="'switch'+i" [(ngModel)]="rule.includedInLimit">
+                          <label class="form-check-label small text-muted" [for]="'switch'+i">
+                            {{ rule.includedInLimit ? 'Afeta Teto' : 'Ignora Teto' }}
+                          </label>
+                        </div>
+
+                      </div>
+                      
+                      <button class="btn btn-link text-danger p-0" (click)="removeCategory(i)" title="Remover Categoria">
+                        🗑️
+                      </button>
+                    </div>
+
+                    <div class="mb-2">
+                      <span *ngFor="let key of rule.keywords; let k = index" class="badge bg-light text-dark border me-1 mb-1">
+                        {{ key }}
+                        <span class="ms-1 text-danger cursor-pointer" style="cursor:pointer;" (click)="removeKeyword(i, k)">&times;</span>
+                      </span>
+                      <span *ngIf="rule.keywords.length === 0" class="small text-muted fst-italic">Sem palavras-chave.</span>
+                    </div>
+
+                    <div class="input-group input-group-sm">
+                      <input type="text" class="form-control" placeholder="Novo termo..." 
+                             [(ngModel)]="newKeywordInputs[i]" 
+                             (keyup.enter)="addKeyword(i)">
+                      <button class="btn btn-outline-secondary" type="button" (click)="addKeyword(i)">OK</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
     </div>
 
-    <div class="col-md-4">
-      <label class="form-label">Mês de referência</label>
-      <input class="form-control" formControlName="referenceMonth" type="month">
-      <!-- O input type=month retorna YYYY-MM -->
-    </div>
-
-    <div class="col-12 text-end">
-      <button class="btn btn-primary" [disabled]="saving || configForm.invalid">
-        {{ saving ? 'Salvando...' : 'Salvar Configurações' }}
+    <div class="position-fixed bottom-0 end-0 p-4" style="z-index: 1050;">
+      <button class="btn btn-primary btn-lg shadow-lg px-5 rounded-pill" (click)="saveConfig()" [disabled]="saving">
+        {{ saving ? 'Salvando...' : '💾 Salvar Alterações' }}
       </button>
     </div>
 
-  </form>
-
+  </div>
 </div>

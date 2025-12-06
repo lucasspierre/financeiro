@@ -2,9 +2,15 @@
 
     <h2 class="mb-3">Contas & Faturas</h2>
 
-    <div class="card mb-4 border-secondary">
+    <div class="card mb-4" [class.border-warning]="editingItem">
         <div class="card-body bg-light">
-            <h5 class="mb-3">Lançar Conta Avulsa (Pix, Boleto, Débito)</h5>
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="mb-0">
+                    {{ editingItem ? '✏️ Editando Conta' : 'Lançar Conta Avulsa (Pix, Boleto, Débito)' }}
+                </h5>
+                <button *ngIf="editingItem" class="btn btn-sm btn-secondary" (click)="cancelEdit()">Cancelar</button>
+            </div>
+
             <form [formGroup]="expenseForm" (ngSubmit)="submitForm()" class="row g-2 align-items-end">
                 
                 <div class="col-md-4">
@@ -22,18 +28,29 @@
                     <input type="date" class="form-control" formControlName="date">
                 </div>
 
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <label class="form-label small mb-1">Tipo</label>
                     <select class="form-select" formControlName="type">
                         <option *ngFor="let t of expenseTypes" [value]="t.value">{{ t.label }}</option>
                     </select>
+                </div>
+
+                <div class="col-md-1 d-flex align-items-center mb-2">
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" id="recurringCheck" formControlName="recurring">
+                      <label class="form-check-label small" for="recurringCheck">
+                        Fixo?
+                      </label>
                     </div>
+                </div>
 
                 <div class="col-md-1">
-                    <button class="btn btn-success w-100" [disabled]="expenseForm.invalid">+</button>
+                    <button class="btn w-100" [class.btn-warning]="editingItem" [class.btn-success]="!editingItem" [disabled]="expenseForm.invalid">
+                        {{ editingItem ? 'Salvar' : '+' }}
+                    </button>
                 </div>
             </form>
-            <div class="form-text mt-2">
+            <div class="form-text mt-2" *ngIf="!editingItem">
                 * Para compras no crédito, use a aba <strong>Cartões</strong>.
             </div>
         </div>
@@ -84,20 +101,33 @@
                             <th>Descrição</th>
                             <th>Categoria</th>
                             <th class="text-end">Valor</th>
-                            <th class="text-center" style="width: 100px;">Ações</th> 
+                            <th class="text-center" style="width: 140px;">Ações</th> 
                         </tr>
                     </thead>
                     <tbody>
-                        <tr *ngFor="let item of filteredItems" [class.table-success]="item.isPaid">
+                        <tr *ngFor="let item of filteredItems" 
+                            [class.table-success]="item.isPaid"
+                            [class.table-warning]="item.isVirtual"
+                            [class.table-active]="editingItem?.id === item.id">
                             <td>
-                                <span *ngIf="item.isPaid" class="text-success me-2" title="Conta Paga">✔</span>
+                                <span *ngIf="item.isPaid" class="text-success me-1" title="Conta Paga">✔</span>
                                 {{ item.date | date:'dd/MM/yyyy' }}
                             </td>
                             
                             <td class="fw-bold text-truncate" style="max-width: 200px;" [title]="item.description">
                                 <span [class.text-muted]="item.isPaid">{{ item.description }}</span>
+                                
                                 <span *ngIf="item.type === 'FATURA'" class="badge bg-warning text-dark ms-2">Fatura</span>
-                                </td>
+                                <span *ngIf="item.isVirtual" class="badge bg-warning text-dark ms-2">Previsto</span>
+                                <span *ngIf="item.recurring && !item.isVirtual" class="badge bg-info text-dark ms-2" title="Recorrente">⟳</span>
+
+                                <span *ngFor="let c of item.classifications" 
+                                      class="badge border ms-1"
+                                      [style.background-color]="c.color"
+                                      style="color: #fff; text-shadow: 0 0 2px #000;">
+                                  {{ c.name }}
+                                </span>
+                            </td>
 
                             <td>
                                 <span class="badge rounded-pill fw-normal" 
@@ -115,20 +145,31 @@
                             </td>
 
                             <td class="text-center">
-                                <button class="btn btn-sm btn-link p-0 me-2" (click)="markAsPaid(item)" 
-                                        [title]="item.isPaid ? 'Marcar como Não Pago' : 'Marcar como Pago'">
-                                    <span [class.text-secondary]="!item.isPaid" [class.text-success]="item.isPaid" class="fs-6">
-                                        {{ item.isPaid ? '❌' : '✅' }}
-                                    </span>
-                                </button>
-                                
-                                <button *ngIf="item.type === 'FATURA'" class="btn btn-sm btn-link text-primary p-0 me-2" (click)="openFaturaDetails(item)" title="Detalhes da Fatura">
-                                    <span class="fs-6">🔍</span>
-                                </button>
+                                <ng-container *ngIf="item.isVirtual; else acoesReais">
+                                    <button class="btn btn-sm btn-success me-2" (click)="confirmarVirtual(item)" title="Confirmar Conta">✔</button>
+                                    <button class="btn btn-sm btn-outline-primary" (click)="startEdit(item)" title="Editar e Confirmar">✏️</button>
+                                </ng-container>
 
-                                <button *ngIf="item.type === 'CONTA'" class="btn btn-sm btn-link text-danger p-0" (click)="deletar(item)" title="Excluir">
-                                    🗑️
-                                </button>
+                                <ng-template #acoesReais>
+                                    <button class="btn btn-sm btn-link p-0 me-2" (click)="markAsPaid(item)" 
+                                            [title]="item.isPaid ? 'Marcar como Não Pago' : 'Marcar como Pago'">
+                                        <span [class.text-secondary]="!item.isPaid" [class.text-success]="item.isPaid" class="fs-6">
+                                            {{ item.isPaid ? '❌' : '✅' }}
+                                        </span>
+                                    </button>
+                                    
+                                    <button *ngIf="item.type === 'FATURA'" class="btn btn-sm btn-link text-primary p-0 me-2" (click)="openFaturaDetails(item)" title="Detalhes da Fatura">
+                                        <span class="fs-6">🔍</span>
+                                    </button>
+
+                                    <button *ngIf="item.type === 'CONTA'" class="btn btn-sm btn-link text-primary p-0 me-2" (click)="startEdit(item)" title="Editar">
+                                        ✏️
+                                    </button>
+
+                                    <button *ngIf="item.type === 'CONTA'" class="btn btn-sm btn-link text-danger p-0" (click)="deletar(item)" title="Excluir">
+                                        🗑️
+                                    </button>
+                                </ng-template>
                             </td>
                         </tr>
                         
@@ -153,8 +194,8 @@
 
 </div>
 
-<div class="modal fade show d-block" *ngIf="showDetailsModal" tabindex="-1" style="background-color: rgba(0, 0, 0, 0.5);">
-    <div class="modal-dialog modal-lg">
+<div class="modal fade show d-block" *ngIf="showDetailsModal" tabindex="-1" style="background-color: rgba(0, 0, 0, 0.5);" (click)="closeFaturaDetails()">
+    <div class="modal-dialog modal-xl" (click)="$event.stopPropagation()">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">Detalhes da Fatura {{ faturaDetalhesCardName }} - {{ formatMonthLabel(filterMonth) }}</h5>
@@ -162,7 +203,7 @@
             </div>
             <div class="modal-body">
                 <h6 class="fw-bold text-danger">TOTAL DE PARCELAS NESTE MÊS: {{ faturaDetalhesTotal | currency:'BRL' }}</h6>
-                <p class="small text-muted">Esta é a soma das parcelas (ou compras à vista) que vencem no mês filtrado.</p>
+                <p class="small text-muted">Esta é a soma das parcelas (ou compras à vista) que vencem no mês filtrado. Valores em verde são estornos.</p>
                 
                 <div class="table-responsive">
                     <table class="table table-sm table-striped align-middle">
@@ -180,12 +221,23 @@
                                 <td>
                                     <strong>{{ detalhe.description }}</strong>
                                     <span *ngIf="detalhe.personName" class="badge bg-info text-dark ms-2">{{ detalhe.personName }}</span>
+                                    <span *ngIf="detalhe.valorParcela < 0" class="badge bg-success ms-1">Crédito</span>
+                                    
+                                    <span *ngFor="let c of detalhe.classifications" 
+                                          class="badge border ms-1"
+                                          [style.background-color]="c.color"
+                                          style="color: #fff; text-shadow: 0 0 2px #000;">
+                                      {{ c.name }}
+                                    </span>
+
                                     <div class="small text-muted">Data: {{ detalhe.dateCompra | date:'dd/MM/yyyy' }}</div>
                                 </td>
                                 <td>
                                     <span class="badge bg-secondary">{{ detalhe.parcelaAtual }}/{{ detalhe.parcelasTotal }}</span>
                                 </td>
-                                <td class="text-end fw-bold">{{ detalhe.valorParcela | currency:'BRL' }}</td>
+                                <td class="text-end fw-bold" [class.text-success]="detalhe.valorParcela < 0">
+                                    {{ detalhe.valorParcela | currency:'BRL' }}
+                                </td>
                                 <td class="text-end">{{ detalhe.amountTotal | currency:'BRL' }}</td>
                                 <td class="text-end text-primary fw-bold">{{ detalhe.saldoRestante | currency:'BRL' }}</td>
                             </tr>

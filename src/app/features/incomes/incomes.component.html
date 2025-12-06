@@ -1,10 +1,18 @@
 <div class="container py-3">
 
-    <h2 class="mb-3">Entradas</h2>
-  <!-- CADASTRO DE ENTRADAS -->
-  <div class="card mb-4">
+  <h2 class="mb-3">Entradas</h2>
+  
+  <div class="card mb-4" [class.border-warning]="editing">
     <div class="card-body">
-      <h4 class="mb-3">Cadastrar nova entrada</h4>
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="mb-0">
+          {{ editing ? '✏️ Editando Entrada' : 'Cadastrar nova entrada' }}
+        </h4>
+        <button *ngIf="editing" class="btn btn-sm btn-secondary" (click)="cancelarEdicao()">
+          Cancelar
+        </button>
+      </div>
+
       <form [formGroup]="incomeForm" (ngSubmit)="submitForm()" class="row g-3">
         <div class="col-md-4">
           <label class="form-label">Descrição</label>
@@ -26,19 +34,21 @@
             </option>
           </select>
         </div>
-        <div class="col-md-2"
-          *ngIf="incomeForm.value.incomeType === 'SALARIO' || incomeForm.value.incomeType === 'RECORRENTE'">
+        
+        <div class="col-md-2">
           <label class="form-label d-block">Recorrente?</label>
           <input type="checkbox" formControlName="recurring"> Sim
         </div>
+
         <div class="col-md-3" *ngIf="incomeForm.value.incomeType === 'REEMBOLSO'">
           <label class="form-label">Pessoa (reembolso)</label>
           <input class="form-control" formControlName="personName">
         </div>
+        
         <div class="col-md-4"
           *ngIf="incomeForm.value.incomeType === 'REEMBOLSO' && incomeForm.value.parcelaReferenteId">
           <label class="form-label">Parcela vinculada</label>
-          <input class="form-control" [value]="incomeForm.value.parcelaReferenteId" readonly>
+          <input class="form-control bg-light" [value]="incomeForm.value.parcelaReferenteId" readonly>
           <small class="text-muted">Vinculada a compra específica.</small>
         </div>
         <div class="col-md-12">
@@ -46,23 +56,26 @@
           <textarea class="form-control" formControlName="notes"></textarea>
         </div>
         <div class="col-12 text-end">
-          <button class="btn btn-primary" [disabled]="incomeForm.invalid">Salvar</button>
+          <button class="btn" [class.btn-warning]="editing" [class.btn-primary]="!editing" [disabled]="incomeForm.invalid">
+            {{ editing ? 'Atualizar' : 'Salvar' }}
+          </button>
         </div>
       </form>
     </div>
   </div>
 
-  <!-- REEMBOLSOS PENDENTES -->
-  <div class="card mb-4" *ngIf="reembolsosPendentesMes.length > 0">
-    <div class="card-body">
-      <h4 class="mb-3 text-warning">⚠ Reembolsos pendentes deste mês</h4>
-      <ul class="list-group">
+  <div class="card mb-4 border-warning" *ngIf="reembolsosPendentesMes.length > 0">
+    <div class="card-header bg-warning-subtle border-warning">
+      <h5 class="mb-0 text-warning-emphasis">⚠ Reembolsos pendentes deste mês</h5>
+    </div>
+    <div class="card-body p-0">
+      <ul class="list-group list-group-flush">
         <li *ngFor="let p of reembolsosPendentesMes"
           class="list-group-item d-flex justify-content-between align-items-center">
           <div>
             <strong>{{ p.personName || 'Terceiro' }}</strong> — {{ p.description }}
             <span class="badge bg-secondary ms-2">Parcela {{ p.numero }}/{{ p.total }}</span>
-          </div><!--  -->
+          </div>
           <div class="d-flex align-items-center">
             <span class="me-3 fw-bold">{{ p.valor | currency:'BRL' }}</span>
             <button class="btn btn-sm btn-success" (click)="preencherReembolso(p)">Receber</button>
@@ -105,8 +118,8 @@
       <div *ngIf="loading" class="p-3">Carregando…</div>
 
       <div class="table-responsive">
-        <table *ngIf="!loading" class="table table-sm mb-0 align-middle">
-          <thead>
+        <table *ngIf="!loading" class="table table-sm mb-0 align-middle table-hover">
+          <thead class="table-light">
             <tr>
               <th>Data</th>
               <th>Descrição</th>
@@ -118,24 +131,38 @@
             </tr>
           </thead>
           <tbody>
-            <tr *ngFor="let i of filteredIncomes" [class.table-warning]="i.id?.startsWith('VIRTUAL-')">
+            <tr *ngFor="let i of filteredIncomes" 
+                [class.table-warning]="i.id?.startsWith('VIRTUAL-')"
+                [class.table-active]="editing?.id === i.id">
               <td>{{ i.date | date:'dd/MM/yyyy' }}</td>
               <td>
                 {{ i.description }}
                 <span *ngIf="i.id?.startsWith('VIRTUAL-')" class="badge bg-warning text-dark ms-1">Previsto</span>
               </td>
-              <td>{{ i.incomeType }}</td>
-              <td class="font-monospace">{{ i.amount | currency:'BRL' }}</td>
+              <td>
+                <span class="badge" 
+                  [class.bg-info]="i.incomeType === 'REEMBOLSO'"
+                  [class.bg-success]="i.incomeType === 'SALARIO'"
+                  [class.bg-secondary]="i.incomeType === 'PONTUAL'"
+                  [class.bg-primary]="i.incomeType === 'RECORRENTE'">
+                  {{ i.incomeType }}
+                </span>
+              </td>
+              <td class="font-monospace fw-bold text-success">{{ i.amount | currency:'BRL' }}</td>
               <td>{{ i.personName || '-' }}</td>
               <td>{{ i.recurring ? 'Sim' : 'Não' }}</td>
               <td class="text-end">
                 <ng-container *ngIf="i.id?.startsWith('VIRTUAL-'); else botoesNormais">
-                  <button class="btn btn-sm btn-success me-2" (click)="confirmarVirtual(i)">Confirmar</button>
-                  <button class="btn btn-sm btn-outline-primary" (click)="iniciarEdicao(i)">Editar</button>
+                  <button class="btn btn-sm btn-success me-2" (click)="confirmarVirtual(i)" title="Confirmar">✔</button>
+                  <button class="btn btn-sm btn-outline-primary" (click)="iniciarEdicao(i)" title="Editar">✏️</button>
                 </ng-container>
                 <ng-template #botoesNormais>
-                  <button class="btn btn-sm btn-primary me-2" (click)="iniciarEdicao(i)">Editar</button>
-                  <button class="btn btn-sm btn-danger" (click)="deletar(i.id)">Excluir</button>
+                  <button class="btn btn-sm btn-link text-primary p-0 me-3" (click)="iniciarEdicao(i)" title="Editar">
+                    ✏️
+                  </button>
+                  <button class="btn btn-sm btn-link text-danger p-0" (click)="deletar(i.id)" title="Excluir">
+                    🗑️
+                  </button>
                 </ng-template>
               </td>
             </tr>

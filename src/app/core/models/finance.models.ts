@@ -1,35 +1,41 @@
 // Modelo de Cartão de Crédito
 export interface CreditCard {
   id: string;
-  name: string;       // Ex: "Nubank", "Inter"
-  bestPurchaseDay: number; // Dia do melhor dia de compra (data limite para entrar na fatura seguinte)
-  dueDay: number;     // Dia do vencimento
-  color?: string;     // Para diferenciar na UI (opcional)
+  name: string;
+  bestPurchaseDay: number;
+  dueDay: number;
+  color?: string;
 }
 
 // TIPOS DE DESPESA
 export type ExpenseType =
-  | 'CARTAO'            // Gasto no cartão de crédito
-  | 'PIX_DEBITO'        // Pagamentos à vista (Pix / Débito)
-  | 'FINANCIAMENTO';    // Financiamentos / Empréstimos
+  | 'CARTAO'
+  | 'PIX_DEBITO'
+  | 'FINANCIAMENTO';
+
+export interface ClassificationRule {
+  name: string;        
+  color: string;       
+  keywords: string[];
+  includedInLimit?: boolean; 
+}
 
 export interface Expense {
   id: string;
   description: string;
-  amount: number;      // valor total da compra ou contrato
-  date: string;        // data da compra
+  amount: number;
+  date: string;
   type: ExpenseType;
-
-  // Campos específicos de cartão
-  cardId?: string;            // ID do cartão utilizado
-  totalInstallments?: number; // número de parcelas
-  installmentValue?: number;  // valor da parcela
-
-  // Campos opcionais
-  personName?: string;        // Quem fez a compra (se vazio = Titular/Eu)
-  notes?: string;             // Observação
+  cardId?: string;
+  totalInstallments?: number;
+  installmentValue?: number;
+  personName?: string;
+  notes?: string;
+  isPaid?: boolean;
+  recurring?: boolean;
   
-  isPaid?: boolean;           // Se a conta já foi paga (para Pix/Financiamento)
+  // ALTERADO: Agora suporta múltiplas classificações calculadas
+  classifications?: ClassificationRule[]; 
 }
 
 // TIPOS DE ENTRADA
@@ -51,9 +57,14 @@ export interface Income {
   parcelaReferenteId?: string;
 }
 
+export interface MonthlyLimit {
+  month: string;
+  amount: number;
+}
+
 export interface FinanceConfig {
-  monthlyLimit: number;
-  referenceMonth: string;
+  monthlyLimits?: MonthlyLimit[];
+  classificationRules?: ClassificationRule[];
 }
 
 export interface FinanceSnapshot {

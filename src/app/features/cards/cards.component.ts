@@ -7,7 +7,8 @@ import {
   FormsModule,
 } from '@angular/forms';
 import { FinanceApiService } from '../../core/services/finance-api.service';
-import { CreditCard, Expense, FinanceSnapshot } from '../../core/models/finance.models';
+import { CreditCard, Expense, FinanceSnapshot, ClassificationRule } from '../../core/models/finance.models';
+import { classifyDescription } from '../../core/utils/classification.utils'; // <--- IMPORTANTE
 
 @Component({
   selector: 'app-cards',
@@ -25,6 +26,7 @@ export class CardsComponent implements OnInit {
   
   cards: CreditCard[] = [];
   purchases: Expense[] = []; 
+  rules: ClassificationRule[] = []; // <--- Lista de regras
 
   selectedCardId: string | null = null;
   editingCard: CreditCard | null = null;
@@ -52,21 +54,26 @@ export class CardsComponent implements OnInit {
     cardId: ['', Validators.required],
     totalInstallments: [1, [Validators.required, Validators.min(1)]],
     personName: [''], 
-    notes: ['']
+    notes: [''],
+    isCredit: [false] 
   });
 
   ngOnInit() {
     this.loadData();
   }
 
-  loadData() {
+loadData() {
     this.loading = true;
     this.api.getSnapshot().subscribe({
       next: (snap) => {
         this.snapshot = snap;
         this.cards = snap.cards || [];
         this.purchases = snap.expenses.filter(e => e.type === 'CARTAO');
-        
+        this.rules = snap.config.classificationRules || [];
+
+        // --- APLICA CLASSIFICAÇÃO AUTOMÁTICA (Múltipla) ---
+        this.aplicarClassificacao();
+
         if (!this.selectedCardId && this.cards.length > 0) {
           this.selectCard(this.cards[0].id);
         } else if (this.selectedCardId) {
@@ -75,6 +82,13 @@ export class CardsComponent implements OnInit {
         this.loading = false;
       },
       error: () => this.loading = false
+    });
+  }
+
+  aplicarClassificacao() {
+    this.purchases.forEach(p => {
+      // Retorna array de regras
+      p.classifications = classifyDescription(p.description, this.rules);
     });
   }
 
@@ -210,14 +224,19 @@ export class CardsComponent implements OnInit {
 
   startEditPurchase(p: Expense) {
       this.editingPurchaseId = p.id;
+      
+      const isNegative = p.amount < 0;
+      const displayAmount = isNegative ? p.amount * -1 : p.amount;
+
       this.purchaseForm.patchValue({
           description: p.description,
-          amount: p.amount,
+          amount: displayAmount,
           date: p.date,
           cardId: p.cardId,
           totalInstallments: p.totalInstallments || 1,
           personName: p.personName || '',
-          notes: p.notes || ''
+          notes: p.notes || '',
+          isCredit: isNegative
       });
       
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -228,7 +247,8 @@ export class CardsComponent implements OnInit {
       this.purchaseForm.reset({
         date: new Date().toISOString().substring(0, 10),
         totalInstallments: 1,
-        cardId: this.selectedCardId 
+        cardId: this.selectedCardId,
+        isCredit: false
       });
   }
 
@@ -236,9 +256,14 @@ export class CardsComponent implements OnInit {
     if (this.purchaseForm.invalid) return;
     const val = this.purchaseForm.value;
 
+    let finalAmount = val.amount!;
+    if (val.isCredit) {
+        finalAmount = finalAmount * -1;
+    }
+
     const expensePayload: any = {
       description: val.description!,
-      amount: val.amount!,
+      amount: finalAmount,
       date: val.date!,
       type: 'CARTAO',
       cardId: val.cardId!,

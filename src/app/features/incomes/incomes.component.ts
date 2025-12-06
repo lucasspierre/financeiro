@@ -35,6 +35,8 @@ export class IncomesComponent implements OnInit {
 
   incomes: Income[] = [];
   filteredIncomes: Income[] = [];
+  
+  // Controla o item sendo editado
   editing: Income | null = null;
 
   mesFiltro: string = '';
@@ -83,23 +85,21 @@ export class IncomesComponent implements OnInit {
 
         this.mesesDisponiveis = this.gerarMesesDisponiveis();
 
+        // LÓGICA CORRIGIDA: Removemos o referenceMonth e priorizamos o mês atual
         if (!this.mesFiltro) {
-          if (
-            this.snapshot.config.referenceMonth &&
-            this.mesesDisponiveis.includes(this.snapshot.config.referenceMonth)
-          ) {
-            this.mesFiltro = this.snapshot.config.referenceMonth;
-          } else if (this.mesesDisponiveis.length > 0) {
             const hoje = new Date();
-            const mesAtual = `${hoje.getFullYear()}-${String(
-              hoje.getMonth() + 1
-            ).padStart(2, '0')}`;
+            const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`;
+            
             if (this.mesesDisponiveis.includes(mesAtual)) {
               this.mesFiltro = mesAtual;
-            } else {
-              this.mesFiltro = this.mesesDisponiveis[0];
+            } else if (this.mesesDisponiveis.length > 0) {
+              // Se não tiver o mês atual, pega o mais recente (primeiro da lista, pois geralmente invertemos no template ou aqui)
+              // Como gerarRangeMeses retorna crescente, e queremos o mais recente se não tiver o atual:
+              // Vamos pegar o último da lista se a lista for crescente, ou o primeiro se você inverteu em outro lugar.
+              // No padrão do gerarRangeMeses ele é crescente. Vamos pegar o último (mais futuro) ou o primeiro.
+              // Geralmente em financeiro, se não tem o mês atual, mostra o último mês com dados.
+              this.mesFiltro = this.mesesDisponiveis[this.mesesDisponiveis.length - 1];
             }
-          }
         }
 
         this.atualizarReembolsosPendentes();
@@ -108,7 +108,7 @@ export class IncomesComponent implements OnInit {
       },
       error: () => (this.loading = false),
     });
-  } // Helper para formatar YYYY-MM -> MM/YYYY
+  } 
 
   formatMonthLabel(mesIso: string): string {
     if (!mesIso) return '';
@@ -150,6 +150,7 @@ export class IncomesComponent implements OnInit {
       }
     }
 
+    // Considera projeção futura para itens recorrentes ativos
     if (this.incomes.some((i) => i.recurring)) {
       const mesFuturo12 = addMeses(mesAtual, 12);
       if (mesFuturo12 > maxMes) maxMes = mesFuturo12;
@@ -163,20 +164,19 @@ export class IncomesComponent implements OnInit {
     this.processarFiltros();
   }
 
-  // Helper para a lógica de ordenação
   private applySort(a: Income, b: Income): number {
     const dateA = new Date(a.date + 'T12:00:00').getTime();
     const dateB = new Date(b.date + 'T12:00:00').getTime();
 
     switch (this.sortOrder) {
       case 'DATE_DESC':
-        return dateB - dateA; // Mais Recente
+        return dateB - dateA; 
       case 'DATE_ASC':
-        return dateA - dateB; // Mais Antiga
+        return dateA - dateB; 
       case 'VAL_DESC':
-        return b.amount - a.amount; // Maior Valor
+        return b.amount - a.amount; 
       case 'VAL_ASC':
-        return a.amount - b.amount; // Menor Valor
+        return a.amount - b.amount; 
       default:
         return 0;
     }
@@ -189,6 +189,7 @@ export class IncomesComponent implements OnInit {
       return;
     }
 
+    // 1. Entradas REAIS deste mês
     const reais = this.incomes.filter((i) => {
       const d = new Date(i.date + 'T12:00:00');
       const mes = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
@@ -198,21 +199,29 @@ export class IncomesComponent implements OnInit {
       return mes === this.mesFiltro;
     });
 
+    // 2. Entradas VIRTUAIS (Projeção)
     const virtuais: Income[] = [];
     const ultimasRecorrentes = new Map<string, Income>();
+    
+    // Ordena por data (crescente) para garantir que pegamos a última ocorrência
     const sorted = [...this.incomes].sort((a, b) =>
       a.date.localeCompare(b.date)
     );
+
+    // Mapeia a última ocorrência de cada descrição (independente de ser recorrente ou não)
     for (const inc of sorted) {
-      if (inc.recurring) {
         ultimasRecorrentes.set(inc.description, inc);
-      }
     }
 
     for (const [desc, ult] of ultimasRecorrentes) {
+      // Se a última ocorrência NÃO for recorrente (foi desativada), não projeta
+      if (!ult.recurring) continue;
+
       const mesUltimo = ult.date.substring(0, 7);
 
+      // Se a última ocorrência é anterior ao filtro atual, projeta
       if (this.mesFiltro > mesUltimo) {
+        // Verifica se já existe uma entrada real com essa descrição neste mês
         const jaExiste = reais.find((r) => r.description === desc);
         if (!jaExiste) {
           const diaOriginal = ult.date.split('-')[2];
@@ -255,7 +264,6 @@ export class IncomesComponent implements OnInit {
       this.snapshot.cards
     );
 
-    // CORREÇÃO: Filtra pelo MÊS DE VENCIMENTO da fatura (Competência + 1)
     const parcelasTerceirosMes = todasParcelas.filter((p) => {
       const dueMonth = addMeses(p.mesReferencia, 1);
       return p.isThirdParty && (!this.mesFiltro || dueMonth === this.mesFiltro);
@@ -285,57 +293,60 @@ export class IncomesComponent implements OnInit {
       personName: p.personName || '',
       parcelaReferenteId: p.parcelaId,
     });
+    
+    // Scroll para o formulário
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   iniciarEdicao(i: Income) {
     this.editing = { ...i };
+
+    this.incomeForm.patchValue({
+      description: i.description,
+      amount: i.amount,
+      date: i.date,
+      incomeType: i.incomeType,
+      recurring: i.recurring || false,
+      personName: i.personName || '',
+      parcelaReferenteId: i.parcelaReferenteId || '',
+      notes: i.notes || ''
+    });
+
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  cancelarEdicao() {
+    this.editing = null;
+    this.incomeForm.reset({
+      incomeType: 'PONTUAL',
+      date: new Date().toISOString().substring(0, 10),
+      recurring: false,
+    });
   }
 
   confirmarVirtual(i: Income) {
+    // Popup removido conforme solicitado
     const novo: Omit<Income, 'id'> = {
       description: i.description,
       amount: i.amount,
       date: i.date,
       incomeType: i.incomeType,
-      recurring: true,
+      recurring: true, // Mantém recorrente para continuar a cadeia
       personName: i.personName,
       notes: i.notes,
     };
 
-    if (
-      confirm(`Deseja efetivar a entrada "${i.description}" para este mês?`)
-    ) {
-      this.api.addIncome(novo).subscribe(() => this.loadData());
-    }
-  }
-
-  salvarEdicao() {
-    if (!this.editing) return;
-
-    if (this.editing.id.startsWith('VIRTUAL-')) {
-      const novo: Omit<Income, 'id'> = { ...this.editing };
-      const { id, ...payload } = novo as any;
-      this.api.addIncome(payload).subscribe(() => {
-        this.editing = null;
-        this.loadData();
-      });
-      return;
-    }
-
-    this.api.updateIncome(this.editing.id, this.editing).subscribe(() => {
-      this.editing = null;
-      this.loadData();
-    });
+    this.api.addIncome(novo).subscribe(() => this.loadData());
   }
 
   deletar(id: string) {
     if (id.startsWith('VIRTUAL-')) {
       alert(
-        'Este é um item PREVISTO gerado automaticamente (recorrente). Não pode ser excluído diretamente. Para removê-lo ou zerar o valor, você deve editar ou excluir a recorrência original no mês em que ela foi lançada pela primeira vez.'
+        'Este é um item PREVISTO gerado automaticamente (recorrente). Para parar de projetar este valor, edite a entrada original do mês anterior e desmarque a opção "Recorrente".'
       );
       return;
     }
-    if (!confirm('Deseja realmente excluir esta entrada?')) return;
+    // Popup removido conforme solicitado
     this.api.deleteIncome(id).subscribe(() => this.loadData());
   }
 
@@ -344,15 +355,13 @@ export class IncomesComponent implements OnInit {
 
     const v = this.incomeForm.value;
 
-    const newIncome: Omit<Income, 'id'> = {
+    const incomePayload: any = {
       description: v.description!,
       amount: v.amount!,
       date: v.date!,
       incomeType: v.incomeType!,
-      recurring:
-        v.incomeType === 'SALARIO' || v.incomeType === 'RECORRENTE'
-          ? !!v.recurring
-          : undefined,
+      // Salva o estado do checkbox independentemente do tipo
+      recurring: !!v.recurring, 
       personName:
         v.incomeType === 'REEMBOLSO' && v.personName ? v.personName : undefined,
       parcelaReferenteId:
@@ -362,13 +371,25 @@ export class IncomesComponent implements OnInit {
       notes: v.notes || undefined,
     };
 
-    this.api.addIncome(newIncome).subscribe(() => {
-      this.incomeForm.reset({
-        incomeType: 'PONTUAL',
-        date: new Date().toISOString().substring(0, 10),
-        recurring: false,
+    if (this.editing) {
+      // Se for virtual, cria novo
+      if (this.editing.id.startsWith('VIRTUAL-')) {
+         this.api.addIncome(incomePayload).subscribe(() => {
+           this.cancelarEdicao();
+           this.loadData();
+         });
+      } else {
+         // Se for real, atualiza
+         this.api.updateIncome(this.editing.id, incomePayload).subscribe(() => {
+           this.cancelarEdicao();
+           this.loadData();
+         });
+      }
+    } else {
+      this.api.addIncome(incomePayload).subscribe(() => {
+        this.cancelarEdicao();
+        this.loadData();
       });
-      this.loadData();
-    });
+    }
   }
 }
